@@ -5,6 +5,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.Chest;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -16,6 +17,7 @@ import org.bukkit.World;
 import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -82,14 +84,44 @@ public class Minion {
         Location loc = minionArmorStand.getLocation();
         Block b = world.getBlockAt(loc.getBlockX() + (idx%3)-1,
             loc.getBlockY()-1, loc.getBlockZ() + (idx/3)-1);
+
+        // Skip if this is the block directly below minion (center block)
+        if (idx == 4) {
+            pdc.set(plugin.indexKey, PersistentDataType.INTEGER, (idx+1)%9);
+            return;
+        }
+
         Player owner = Bukkit.getPlayer(pdc.get(plugin.ownerKey, PersistentDataType.STRING));
         Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
+
+        // find adjacent chest in cross pattern (N,S,E,W only)
+        Inventory chestInv = null;
+        int[][] crossOffsets = {{0,1}, {0,-1}, {1,0}, {-1,0}};  // x,z offsets for N,S,E,W
+        for (int[] offset : crossOffsets) {
+            Block adj;
+            // check cardinal directions
+            adj = world.getBlockAt(loc.getBlockX() + offset[0], loc.getBlockY(), loc.getBlockZ() + offset[1]);
+            if (adj.getState() instanceof Chest chest) {
+                chestInv = chest.getInventory();
+                break;
+            }
+        }
+
         // attempt chosen action, fallback to the other
         boolean did = false;
         if (isMine) {
             if (b.getType() == mat) {
                 // mine
-                b.getDrops().forEach(d -> { var left = storage.addItem(d); left.values().forEach(o -> world.dropItemNaturally(b.getLocation(), o)); });
+                Inventory finalChestInv = chestInv;
+                b.getDrops().forEach(d -> {
+                    Map<Integer, ItemStack> left;
+                    if (finalChestInv != null) {
+                        left = finalChestInv.addItem(d);
+                    } else {
+                        left = storage.addItem(d);
+                    }
+                    left.values().forEach(o -> world.dropItemNaturally(b.getLocation(), o));
+                });
                 b.setType(Material.AIR);
                 did = true;
             } else if (b.getType() == Material.AIR) {
@@ -104,7 +136,16 @@ public class Minion {
                 did = true;
             } else if (b.getType() == mat) {
                 // fallback mine
-                b.getDrops().forEach(d -> { var left = storage.addItem(d); left.values().forEach(o -> world.dropItemNaturally(b.getLocation(), o)); });
+                Inventory finalChestInv1 = chestInv;
+                b.getDrops().forEach(d -> {
+                    Map<Integer, ItemStack> left;
+                    if (finalChestInv1 != null) {
+                        left = finalChestInv1.addItem(d);
+                    } else {
+                        left = storage.addItem(d);
+                    }
+                    left.values().forEach(o -> world.dropItemNaturally(b.getLocation(), o));
+                });
                 b.setType(Material.AIR);
                 did = true;
             }
