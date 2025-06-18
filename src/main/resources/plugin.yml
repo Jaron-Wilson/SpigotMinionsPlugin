@@ -1,0 +1,22 @@
+name: MinecraftMinionPlugin
+version: '1.1'
+#main: me.jaron.minionPlugin.MinecraftMinionPlugin
+main: me.jaron.minion.MinionPlugin
+api-version: '1.21'
+
+commands:
+#    minion:
+#      description: Gives a minion placer item.
+#      usage: /minion give <player> <minion_type>
+  createminion:
+    description: Creates a new minion.
+    usage: /<command>
+  showminioninventory:
+    description: Shows the inventory of the nearest minion.
+    usage: /<command>
+  giveminionegg:
+    description: Gives the player a minion spawn egg.
+    usage: /<command>
+  minionautomation:
+    description: Start or stop your minion automation.
+    usage: /<command> <start|stop>
