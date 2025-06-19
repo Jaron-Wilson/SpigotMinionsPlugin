@@ -375,6 +375,8 @@ public class Minion {
         return switch (targetCrop) {
             case CARROT -> Material.CARROTS;
             case POTATO -> Material.POTATOES;
+            case WHEAT_SEEDS -> Material.WHEAT;
+            case BEETROOT, BEETROOT_SEEDS -> Material.BEETROOTS;
             default -> targetCrop;
         };
     }
@@ -384,7 +386,7 @@ public class Minion {
             case WHEAT -> Material.WHEAT_SEEDS;
             case CARROTS, CARROT -> Material.CARROT;
             case POTATOES, POTATO -> Material.POTATO;
-            case BEETROOTS -> Material.BEETROOT_SEEDS;
+            case BEETROOTS, BEETROOT, BEETROOT_SEEDS -> Material.BEETROOT_SEEDS;
             case NETHER_WART -> Material.NETHER_WART;
             default -> crop;
         };
