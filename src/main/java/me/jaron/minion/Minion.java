@@ -97,7 +97,7 @@ public class Minion {
     public void plantBlock() {
         processCell(false);
     }
-    private void processCell(boolean isMine) {
+    private void processCell(Boolean forceMine) {
         if (minionArmorStand.isDead()) return;
         World world = minionArmorStand.getWorld();
         var persistentDataContainer = minionArmorStand.getPersistentDataContainer();
@@ -113,100 +113,100 @@ public class Minion {
             return;
         }
 
-        Player owner = Bukkit.getPlayer(persistentDataContainer.get(plugin.ownerKey, PersistentDataType.STRING));
         Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
+        if (storage == null) return;
 
-        Inventory chestInv = null;
-        chestInv = checkForChest(world,loc);
+        Inventory chestInv = checkForChest(world,loc);
 
         boolean didSomething = false;
-        String actionPrefix = isMine ? "Minion Storage is: " : "Planting.... Minion Storage is: ";
-        Inventory targetInventory = isMine ? storage : chestInv;
-//        Bukkit.broadcastMessage(actionPrefix + targetInventory.firstEmpty());
 
-        if (block.getType() == mat) {
-            minionArmorStand.setCustomName(ChatColor.RED + "Mining" + (isMine ? "" : "..."));
-            didSomething = minionMineEvent(block, chestInv, storage, world);
-        } else if (block.getType() == Material.AIR) {
-            block.setType(mat);
-            minionArmorStand.setCustomName(ChatColor.GREEN + "Planting" + (isMine ? "" : "..."));
-            minionArmorStand.swingOffHand();
-            didSomething = true;
-        }
-
-        if (!didSomething){
-            // neither action possible
-            if (isMine) {
-                minionArmorStand.setCustomName(ChatColor.RED + "Need " + mat.name());
+        if (forceMine != null) { // Manual override from commands
+            if (forceMine) { // Mine Once
+                if (block.getType() == mat) {
+                    didSomething = minionMineEvent(block, chestInv, storage, world);
+                }
+            } else { // Plant Once
+                if (block.getType() == Material.AIR) {
+                    didSomething = plantBlock(block, mat);
+                }
+            }
+        } else { // Automation logic
+            boolean storageSystemFull = isStorageFull(mat, storage, chestInv);
+            if (storageSystemFull) {
+                // If storage is full, only plant
+                if (block.getType() == Material.AIR) {
+                    didSomething = plantBlock(block, mat);
+                }
             } else {
-                minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + block.getType());
+                // If storage is not full, prioritize mining, then planting
+                if (block.getType() == mat) {
+                    didSomething = minionMineEvent(block, chestInv, storage, world);
+                } else if (block.getType() == Material.AIR) {
+                    didSomething = plantBlock(block, mat);
+                }
             }
         }
+
+        if (!didSomething) {
+            boolean storageSystemFull = isStorageFull(mat, storage, chestInv);
+            if (storageSystemFull) {
+                minionArmorStand.setCustomName(ChatColor.RED + "Storage Full!");
+            } else if (block.getType() != mat && block.getType() != Material.AIR) {
+                minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + block.getType());
+            } else {
+                minionArmorStand.setCustomName(ChatColor.RED + "Need " + mat.name());
+            }
+        }
+
         minionArmorStand.setCustomNameVisible(true);
-        // advance pointer
         persistentDataContainer.set(plugin.indexKey, PersistentDataType.INTEGER, (idx+1)%9);
     }
 
+    private boolean plantBlock(Block block, Material mat) {
+        minionArmorStand.setCustomName(ChatColor.GREEN + "Planting");
+        block.setType(mat);
+        return true;
+    }
 
-    boolean chestFull = false;
-    boolean minionFull = false;
+    private boolean isStorageFull(Material mat, Inventory storage, Inventory chestInv) {
+        boolean minionStorageFull = isFull(storage, mat);
+        if (chestInv != null) {
+            boolean chestFull = isFull(chestInv, mat);
+            return chestFull && minionStorageFull;
+        }
+        return minionStorageFull;
+    }
+
+    private boolean isFull(Inventory inv, Material mat) {
+        if (inv.firstEmpty() != -1) return false;
+        return Arrays.stream(inv.getContents())
+            .filter(item -> item != null && item.getType() == mat)
+            .allMatch(item -> item.getAmount() >= item.getMaxStackSize());
+    }
 
     public Boolean minionMineEvent(Block block, Inventory chestInv, Inventory storage, World world) {
+        if (storage == null) return false;
+
+        minionArmorStand.setCustomName(ChatColor.GOLD + "Mining");
         minionArmorStand.swingMainHand();
         block.getDrops().forEach(d -> {
             Map<Integer, ItemStack> left;
-            if (chestInv != null && storage != null) {
-                if (chestInv.firstEmpty() == -1) {
-//                    Says its full but lets check the quantity in there, we might still have space!
-                    ItemStack[] chestContents = chestInv.getContents();
-                    ItemStack[] minionStorage = storage.getContents();
 
-                    if (chestFull && minionFull) {
-                        Bukkit.broadcastMessage(ChatColor.RED + "The Storages Are full!");
-                    }else {
-                        if (!chestFull) {
-                            for (ItemStack content : chestContents) {
-                                if (content.getAmount() != content.getMaxStackSize()) {
-                                    Bukkit.broadcastMessage(ChatColor.GREEN + "We still have space!");
-                                    chestFull = false;
-                                } else {
-                                    Bukkit.broadcastMessage(ChatColor.BLUE + "No more space look! \n" + content);
-                                    chestFull = true;
-                                }
-                            }
-                        } else if (!minionFull) {
-                            for (ItemStack content : minionStorage) {
-                                if (content.getAmount() != content.getMaxStackSize()) {
-                                    Bukkit.broadcastMessage(ChatColor.LIGHT_PURPLE + "We still have space!");
-                                    minionFull = false;
-                                } else {
-                                    Bukkit.broadcastMessage(ChatColor.GRAY + "No more space look! \n" + content);
-                                    minionFull = true;
-                                }
-                            }
+            if (chestInv != null) {
+                // Always try to add to chest first. addItem will handle partial stacks.
+                left = chestInv.addItem(d);
 
-                        }
-                    }
-
-
-                    if (storage.firstEmpty() == -1) {
-                        Bukkit.broadcastMessage("Minions inventorys are full");
-                        minionArmorStand.setCustomName(ChatColor.DARK_AQUA + "!Inventorys Are full!");
-                        left = null;
-                    }
-                    else {
-                        Bukkit.broadcastMessage("Minion chest is full");
-                        minionArmorStand.setCustomName(ChatColor.DARK_AQUA + "!Chest is full!");
-                        left = storage.addItem(d);
-                    }
-                }
-                else {
-                    left = chestInv.addItem(d);
+                // If there are leftovers, try adding to minion storage.
+                if (!left.isEmpty()) {
+                    left = storage.addItem(left.values().toArray(new ItemStack[0]));
                 }
             } else {
+                // No chest, add directly to minion storage.
                 left = storage.addItem(d);
             }
-            if (left != null) {
+
+            // Drop any remaining items on the ground.
+            if (left != null && !left.isEmpty()) {
                 left.values().forEach(o -> world.dropItemNaturally(block.getLocation(), o));
             }
         });
@@ -228,9 +228,7 @@ public class Minion {
     public void startAutomation() {
         if (miningTask != null && !miningTask.isCancelled()) return;
         miningTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            // random mine or plant
-            boolean mine = ThreadLocalRandom.current().nextBoolean();
-            processCell(mine);
+            processCell(null);
          }, 0L, 60L);
     }
     // stop automation

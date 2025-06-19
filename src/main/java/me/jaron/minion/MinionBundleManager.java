@@ -10,6 +10,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.ConfigurationSection;
 
 import java.util.*;
 
@@ -51,10 +53,11 @@ public class MinionBundleManager {
     public Inventory getBundleInventory(Player player) {
         List<ItemStack> items = bundleContents.computeIfAbsent(player.getUniqueId(), k -> new ArrayList<>());
         int page = currentPage.computeIfAbsent(player.getUniqueId(), k -> 0);
-        int totalPages = (int) Math.ceil(items.size() / (double) ITEMS_PER_PAGE);
+        int totalPages = Math.max(1, (int) Math.ceil(items.size() / (double) ITEMS_PER_PAGE));
 
         Inventory inv = Bukkit.createInventory(new BundleHolder(player.getUniqueId()), 54,
-                ChatColor.GOLD + "Bundle " + ChatColor.GRAY + "(Page " + (page + 1) + "/" + Math.max(1, totalPages) + ")");
+                ChatColor.GOLD + "Bundle " + ChatColor.GRAY + "(Page " + (page + 1) + "/" + totalPages +
+                        " - Items: " + items.size() + ")");
 
         // Add items for current page
         int startIndex = page * ITEMS_PER_PAGE;
@@ -62,7 +65,7 @@ public class MinionBundleManager {
             inv.setItem(i, items.get(startIndex + i));
         }
 
-        // Add navigation and collect buttons
+        // Add navigation buttons
         setupNavigationButtons(inv, page, totalPages);
 
         return inv;
@@ -151,6 +154,64 @@ public class MinionBundleManager {
         if (current > 0) {
             currentPage.put(player.getUniqueId(), current - 1);
             player.openInventory(getBundleInventory(player));
+        }
+    }
+
+    public void saveData(YamlConfiguration config) {
+        for (Map.Entry<UUID, List<ItemStack>> entry : bundleContents.entrySet()) {
+            String path = "bundles." + entry.getKey().toString();
+            List<ItemStack> items = entry.getValue();
+
+            // Save items
+            for (int i = 0; i < items.size(); i++) {
+                config.set(path + ".items." + i, items.get(i));
+            }
+            // Save current page
+            config.set(path + ".currentPage", currentPage.getOrDefault(entry.getKey(), 0));
+            // Save total items count for info
+            config.set(path + ".totalItems", items.size());
+        }
+    }
+
+    public void loadData(YamlConfiguration config) {
+        bundleContents.clear();
+        currentPage.clear();
+
+        if (!config.contains("bundles")) return;
+
+        ConfigurationSection bundlesSection = config.getConfigurationSection("bundles");
+        if (bundlesSection == null) return;
+
+        for (String uuidStr : bundlesSection.getKeys(false)) {
+            try {
+                UUID uuid = UUID.fromString(uuidStr);
+                String path = "bundles." + uuidStr;
+
+                // Load the items
+                List<ItemStack> items = new ArrayList<>();
+                ConfigurationSection itemsSection = config.getConfigurationSection(path + ".items");
+                if (itemsSection != null) {
+                    for (String index : itemsSection.getKeys(false)) {
+                        ItemStack item = itemsSection.getItemStack(index);
+                        if (item != null && !item.getType().isAir()) {
+                            items.add(item);
+                        }
+                    }
+                }
+                bundleContents.put(uuid, items);
+
+                // Load the current page
+                currentPage.put(uuid, config.getInt(path + ".currentPage", 0));
+
+                // Validate current page is within bounds
+                int totalPages = (int) Math.ceil(items.size() / (double) ITEMS_PER_PAGE);
+                if (currentPage.get(uuid) >= totalPages) {
+                    currentPage.put(uuid, Math.max(0, totalPages - 1));
+                }
+
+            } catch (IllegalArgumentException e) {
+                plugin.getLogger().warning("Invalid UUID in bundle storage: " + uuidStr);
+            }
         }
     }
 
