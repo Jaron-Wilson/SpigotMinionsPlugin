@@ -17,6 +17,7 @@ import org.bukkit.World;
 import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -27,33 +28,55 @@ public class Minion {
     private final ArmorStand minionArmorStand;
     private BukkitTask miningTask;
 
-    private static final int SELECTOR_SLOT = 1;
+    private static final int SELECTOR_SLOT = 8;
 
     public Minion(MinionPlugin plugin, ArmorStand minionArmorStand) {
         this.plugin = plugin;
         this.minionArmorStand = minionArmorStand;
     }
 
+    public static ItemStack createBackButton() {
+        ItemStack barrier = new ItemStack(Material.BARRIER);
+        ItemMeta meta = barrier.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.RED + "Back");
+            barrier.setItemMeta(meta);
+        }
+        return barrier;
+    }
+
+    public static ItemStack createCollectButton(String text) {
+        ItemStack hopper = new ItemStack(Material.HOPPER);
+        ItemMeta meta = hopper.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.GREEN + text);
+            hopper.setItemMeta(meta);
+        }
+        return hopper;
+    }
+
     public Inventory getActionInventory() {
-        // build UI: Mine Once, Target selector, Plant Once, Storage
         Inventory inv = Bukkit.createInventory(new MinionInventoryHolder(minionArmorStand.getUniqueId()), 9, "Minion Control Panel");
-        // mode button
-        byte mode = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.modeKey, PersistentDataType.BYTE, (byte)0);
-        String modeName = (mode==0 ? "Mine" : "Plant");
-        ItemStack modeItem = createItem(Material.REDSTONE_TORCH, ChatColor.YELLOW + "Mode: " + modeName);
         ItemStack mineItem = createItem(Material.DIAMOND_PICKAXE, ChatColor.GOLD + "Mine Once");
         ItemStack selector = createItem(Material.valueOf(minionArmorStand.getPersistentDataContainer()
             .getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name())),
             ChatColor.AQUA + "Target: " + minionArmorStand.getPersistentDataContainer()
             .getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name()));
-        ItemStack plantItem = createItem(Material.WHEAT_SEEDS, ChatColor.GREEN + "Plant Once");
         ItemStack storage = createItem(Material.CHEST, ChatColor.BLUE + "Open Minion Storage");
+
         inv.setItem(0, mineItem);
-        inv.setItem(SELECTOR_SLOT, selector);
-        inv.setItem(2, plantItem);
         inv.setItem(4, storage);
-        inv.setItem(6, modeItem);
+        inv.setItem(SELECTOR_SLOT - 1, selector);
+        inv.setItem(SELECTOR_SLOT, createBackButton());
         return inv;
+    }
+
+    public Inventory getMinionStorage() {
+        Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
+        storage.setItem(storage.getSize() - 1, createBackButton());
+        storage.setItem(storage.getSize() - 2, createCollectButton("Collect All"));
+        storage.setItem(storage.getSize() - 3, createCollectButton("Collect from Chest"));
+        return storage;
     }
 
     private ItemStack createItem(Material material, String name) {
@@ -77,93 +100,119 @@ public class Minion {
     private void processCell(boolean isMine) {
         if (minionArmorStand.isDead()) return;
         World world = minionArmorStand.getWorld();
-        var pdc = minionArmorStand.getPersistentDataContainer();
-        String target = pdc.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
+        var persistentDataContainer = minionArmorStand.getPersistentDataContainer();
+        String target = persistentDataContainer.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
         Material mat = Material.valueOf(target);
-        int idx = pdc.getOrDefault(plugin.indexKey, PersistentDataType.INTEGER, 0);
+        int idx = persistentDataContainer.getOrDefault(plugin.indexKey, PersistentDataType.INTEGER, 0);
         Location loc = minionArmorStand.getLocation();
-        Block b = world.getBlockAt(loc.getBlockX() + (idx%3)-1,
+        Block block = world.getBlockAt(loc.getBlockX() + (idx%3)-1,
             loc.getBlockY()-1, loc.getBlockZ() + (idx/3)-1);
 
-        // Skip if this is the block directly below minion (center block)
         if (idx == 4) {
-            pdc.set(plugin.indexKey, PersistentDataType.INTEGER, (idx+1)%9);
+            persistentDataContainer.set(plugin.indexKey, PersistentDataType.INTEGER, (idx+1)%9);
             return;
         }
 
-        Player owner = Bukkit.getPlayer(pdc.get(plugin.ownerKey, PersistentDataType.STRING));
+        Player owner = Bukkit.getPlayer(persistentDataContainer.get(plugin.ownerKey, PersistentDataType.STRING));
         Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
 
-        // find adjacent chest in cross pattern (N,S,E,W only)
         Inventory chestInv = null;
-        int[][] crossOffsets = {{0,1}, {0,-1}, {1,0}, {-1,0}};  // x,z offsets for N,S,E,W
-        for (int[] offset : crossOffsets) {
-            Block adj;
-            // check cardinal directions
-            adj = world.getBlockAt(loc.getBlockX() + offset[0], loc.getBlockY(), loc.getBlockZ() + offset[1]);
-            if (adj.getState() instanceof Chest chest) {
-                chestInv = chest.getInventory();
-                break;
-            }
+        chestInv = checkForChest(world,loc);
+
+        boolean didSomething = false;
+        String actionPrefix = isMine ? "Minion Storage is: " : "Planting.... Minion Storage is: ";
+        Inventory targetInventory = isMine ? storage : chestInv;
+//        Bukkit.broadcastMessage(actionPrefix + targetInventory.firstEmpty());
+
+        if (block.getType() == mat) {
+            minionArmorStand.setCustomName(ChatColor.RED + "Mining" + (isMine ? "" : "..."));
+            didSomething = minionMineEvent(block, chestInv, storage, world);
+        } else if (block.getType() == Material.AIR) {
+            block.setType(mat);
+            minionArmorStand.setCustomName(ChatColor.GREEN + "Planting" + (isMine ? "" : "..."));
+            minionArmorStand.swingOffHand();
+            didSomething = true;
         }
 
-        // attempt chosen action, fallback to the other
-        boolean did = false;
-        if (isMine) {
-            if (b.getType() == mat) {
-                // mine
-                Inventory finalChestInv = chestInv;
-                b.getDrops().forEach(d -> {
-                    Map<Integer, ItemStack> left;
-                    if (finalChestInv != null) {
-                        left = finalChestInv.addItem(d);
-                    } else {
-                        left = storage.addItem(d);
-                    }
-                    left.values().forEach(o -> world.dropItemNaturally(b.getLocation(), o));
-                });
-                b.setType(Material.AIR);
-                did = true;
-            } else if (b.getType() == Material.AIR) {
-                // fallback plant
-                b.setType(mat);
-                did = true;
-            }
-        } else {
-            if (b.getType() == Material.AIR) {
-                // plant
-                b.setType(mat);
-                did = true;
-            } else if (b.getType() == mat) {
-                // fallback mine
-                Inventory finalChestInv1 = chestInv;
-                b.getDrops().forEach(d -> {
-                    Map<Integer, ItemStack> left;
-                    if (finalChestInv1 != null) {
-                        left = finalChestInv1.addItem(d);
-                    } else {
-                        left = storage.addItem(d);
-                    }
-                    left.values().forEach(o -> world.dropItemNaturally(b.getLocation(), o));
-                });
-                b.setType(Material.AIR);
-                did = true;
-            }
-        }
-        // update name based on result
-        if (did) {
-            minionArmorStand.setCustomName(ChatColor.YELLOW + "CobbleMinion");
-        } else {
+        if (!didSomething){
             // neither action possible
             if (isMine) {
                 minionArmorStand.setCustomName(ChatColor.RED + "Need " + mat.name());
             } else {
-                minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + b.getType());
+                minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + block.getType());
             }
         }
         minionArmorStand.setCustomNameVisible(true);
         // advance pointer
-        pdc.set(plugin.indexKey, PersistentDataType.INTEGER, (idx+1)%9);
+        persistentDataContainer.set(plugin.indexKey, PersistentDataType.INTEGER, (idx+1)%9);
+    }
+
+
+    boolean chestFull = false;
+    boolean minionFull = false;
+
+    public Boolean minionMineEvent(Block block, Inventory chestInv, Inventory storage, World world) {
+        minionArmorStand.swingMainHand();
+        block.getDrops().forEach(d -> {
+            Map<Integer, ItemStack> left;
+            if (chestInv != null && storage != null) {
+                if (chestInv.firstEmpty() == -1) {
+//                    Says its full but lets check the quantity in there, we might still have space!
+                    ItemStack[] chestContents = chestInv.getContents();
+                    ItemStack[] minionStorage = storage.getContents();
+
+                    if (chestFull && minionFull) {
+                        Bukkit.broadcastMessage(ChatColor.RED + "The Storages Are full!");
+                    }else {
+                        if (!chestFull) {
+                            for (ItemStack content : chestContents) {
+                                if (content.getAmount() != content.getMaxStackSize()) {
+                                    Bukkit.broadcastMessage(ChatColor.GREEN + "We still have space!");
+                                    chestFull = false;
+                                } else {
+                                    Bukkit.broadcastMessage(ChatColor.BLUE + "No more space look! \n" + content);
+                                    chestFull = true;
+                                }
+                            }
+                        } else if (!minionFull) {
+                            for (ItemStack content : minionStorage) {
+                                if (content.getAmount() != content.getMaxStackSize()) {
+                                    Bukkit.broadcastMessage(ChatColor.LIGHT_PURPLE + "We still have space!");
+                                    minionFull = false;
+                                } else {
+                                    Bukkit.broadcastMessage(ChatColor.GRAY + "No more space look! \n" + content);
+                                    minionFull = true;
+                                }
+                            }
+
+                        }
+                    }
+
+
+                    if (storage.firstEmpty() == -1) {
+                        Bukkit.broadcastMessage("Minions inventorys are full");
+                        minionArmorStand.setCustomName(ChatColor.DARK_AQUA + "!Inventorys Are full!");
+                        left = null;
+                    }
+                    else {
+                        Bukkit.broadcastMessage("Minion chest is full");
+                        minionArmorStand.setCustomName(ChatColor.DARK_AQUA + "!Chest is full!");
+                        left = storage.addItem(d);
+                    }
+                }
+                else {
+                    left = chestInv.addItem(d);
+                }
+            } else {
+                left = storage.addItem(d);
+            }
+            if (left != null) {
+                left.values().forEach(o -> world.dropItemNaturally(block.getLocation(), o));
+            }
+        });
+        block.setType(Material.AIR);
+        return true;
+
     }
 
     /** Toggle between Mine (0) and Plant (1) modes */
@@ -187,6 +236,19 @@ public class Minion {
     // stop automation
     public void stopAutomation() {
         Bukkit.getScheduler().cancelTasks(plugin);
+    }
+
+    public Inventory checkForChest(World world, Location loc) {
+        int[][] crossOffsets = {{0,1}, {0,-1}, {1,0}, {-1,0}};  // x,z offsets for N,S,E,W
+        for (int[] offset : crossOffsets) {
+            Block adj;
+            adj = world.getBlockAt(loc.getBlockX() + offset[0], loc.getBlockY(), loc.getBlockZ() + offset[1]);
+            if (adj.getState() instanceof Chest chest) {
+//                Bukkit.broadcastMessage(ChatColor.GREEN + "Chest found! ");
+                return chest.getInventory();
+            }
+        }
+        return null;
     }
 
     public static class MinionInventoryHolder implements InventoryHolder {

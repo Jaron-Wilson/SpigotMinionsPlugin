@@ -33,6 +33,7 @@ public class MinionPlugin extends JavaPlugin {
 
     private final Set<UUID> automationPlayers = new HashSet<>();
     private final Map<UUID, Inventory> minionInventories = new HashMap<>();
+    private MinionBundleManager bundleManager;
 
     public Inventory getMinionStorage(UUID uuid) {
         return minionInventories.computeIfAbsent(uuid, u -> {
@@ -46,9 +47,10 @@ public class MinionPlugin extends JavaPlugin {
         });
     }
 
-    private class StorageHolder implements InventoryHolder {
+    public class StorageHolder implements InventoryHolder {
         private final UUID uuid;
         public StorageHolder(UUID uuid) { this.uuid = uuid; }
+        public UUID getMinionUUID() { return uuid; }
         @Override
         public Inventory getInventory() { return minionInventories.get(uuid); }
     }
@@ -58,11 +60,28 @@ public class MinionPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ArmorStandClicked(this), this);
         getServer().getPluginManager().registerEvents(new InventoryClick(this), this);
         getServer().getPluginManager().registerEvents(new MinionSpawnListener(this), this);
+        getServer().getPluginManager().registerEvents(new BundleInteractListener(this), this);
+
+        bundleManager = new MinionBundleManager(this);
 
         Objects.requireNonNull(getCommand("createminion")).setExecutor(new CreateMinionCommand(this));
         Objects.requireNonNull(getCommand("showminioninventory")).setExecutor(new ShowMinionInventoryCommand(this));
         Objects.requireNonNull(getCommand("giveminionegg")).setExecutor(new GiveMinionEggCommand(this));
         Objects.requireNonNull(getCommand("minionautomation")).setExecutor(new MinionAutomationCommand(this));
+        Objects.requireNonNull(getCommand("collectall")).setExecutor(new CollectAllCommand(this));
+        Objects.requireNonNull(getCommand("getbundle")).setExecutor((sender, cmd, label, args) -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage(ChatColor.RED + "This command can only be used by players!");
+                return true;
+            }
+            bundleManager.createBundle(player);
+            player.sendMessage(ChatColor.GREEN + "You received a Minion Collection Bundle!");
+            return true;
+        });
+    }
+
+    public MinionBundleManager getBundleManager() {
+        return bundleManager;
     }
 
     public void spawnMinion(Player owner, Location location) {
@@ -73,8 +92,8 @@ public class MinionPlugin extends JavaPlugin {
             as.setSmall(true);
             as.setGravity(false);
             as.setInvulnerable(true);
+            as.setArms(true);
 
-            as.setCustomName(ChatColor.YELLOW + "CobbleMinion");
             as.setCustomNameVisible(true);
 
             if (as.getEquipment() != null) {

@@ -20,3 +20,9 @@ commands:
   minionautomation:
     description: Start or stop your minion automation.
     usage: /<command> <start|stop>
+  collectall:
+    description: Collect items from all your minions' storage and chests
+    usage: /<command>
+  getbundle:
+    description: Get a Minion Collection Bundle for infinite storage
+    usage: /<command>

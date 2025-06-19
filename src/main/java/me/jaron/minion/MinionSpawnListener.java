@@ -33,14 +33,12 @@ public class MinionSpawnListener implements Listener {
             if (itemInHand.getItemMeta().getPersistentDataContainer().has(plugin.minionEggKey, PersistentDataType.BYTE)) {
                 event.setCancelled(true);
 
-                // CORRECTED: Manually center the location on top of the clicked block
                 Location spawnLocation = Objects.requireNonNull(event.getClickedBlock()).getLocation().add(0.5, 1.0, 0.5);
                 spawnLocation.setYaw(player.getLocation().getYaw());
 
                 plugin.spawnMinion(player, spawnLocation);
 
                 if (player.getGameMode() != GameMode.CREATIVE) {
-                    // CORRECTED: The proper way to remove one item from a stack
                     itemInHand.setAmount(itemInHand.getAmount() - 1);
                 }
             }
