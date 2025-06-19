@@ -400,22 +400,87 @@ public class InventoryClick implements Listener {
         }
 
         // Handle bundle inventory clicks
-        if (event.getInventory().getHolder() instanceof MinionBundleManager.BundleHolder) {
+        if (event.getInventory().getHolder() instanceof MinionBundleManager.RawItemsHolder) {
             event.setCancelled(true);
             ItemStack clickedItem = event.getCurrentItem();
-            if (clickedItem == null) return;
+            if (clickedItem == null || !clickedItem.hasItemMeta()) return;
 
-            if (clickedItem.getType() == Material.ARROW) {
+            String displayName = clickedItem.getItemMeta().getDisplayName();
+            if (displayName.equals(ChatColor.YELLOW + "Next Page")) {
+                plugin.getBundleManager().nextPage(player);
+            } else if (displayName.equals(ChatColor.YELLOW + "Previous Page")) {
+                plugin.getBundleManager().previousPage(player);
+            } else if (displayName.equals(ChatColor.GREEN + "View Categories")) {
+                plugin.getBundleManager().openCategoriesView(player);
+            } else if (displayName.equals(ChatColor.GREEN + "Collect All")) {
+                CollectAllCommand collectAll = new CollectAllCommand(plugin);
+                int collected = collectAll.collectAllForPlayer(player);
+                if (collected > 0) {
+                    player.sendMessage(ChatColor.GREEN + "Collected " + collected + " items!");
+                    plugin.getBundleManager().refreshInventory(player);
+                } else {
+                    player.sendMessage(ChatColor.YELLOW + "No items to collect!");
+                }
+            }
+            return;
+        }
+
+        if (event.getInventory().getHolder() instanceof MinionBundleManager.CategoriesHolder) {
+            event.setCancelled(true);
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+            if (clickedItem.hasItemMeta()) {
                 String displayName = clickedItem.getItemMeta().getDisplayName();
                 if (displayName.equals(ChatColor.YELLOW + "Next Page")) {
                     plugin.getBundleManager().nextPage(player);
+                    return;
                 } else if (displayName.equals(ChatColor.YELLOW + "Previous Page")) {
                     plugin.getBundleManager().previousPage(player);
+                    return;
+                } else if (displayName.equals(ChatColor.AQUA + "View Raw Items")) {
+                    plugin.getBundleManager().openRawItemsView(player);
+                    return;
+                } else if (displayName.equals(ChatColor.GREEN + "Collect All")) {
+                    CollectAllCommand collectAll = new CollectAllCommand(plugin);
+                    int collected = collectAll.collectAllForPlayer(player);
+                    if (collected > 0) {
+                        player.sendMessage(ChatColor.GREEN + "Collected " + collected + " items!");
+                        plugin.getBundleManager().refreshInventory(player);
+                    } else {
+                        player.sendMessage(ChatColor.YELLOW + "No items to collect!");
+                    }
+                    return;
                 }
-            } else if (clickedItem.getType() == Material.HOPPER &&
-                      clickedItem.getItemMeta().getDisplayName().equals(ChatColor.GREEN + "Collect All")) {
-                CollectAllCommand collector = new CollectAllCommand(plugin);
-                collector.onCommand(player, null, "", new String[]{});
+            }
+
+            // It's a category item
+            Material material = clickedItem.getType();
+            int totalAmount = 0;
+            if (clickedItem.hasItemMeta() && clickedItem.getItemMeta().hasLore()) {
+                String loreLine = clickedItem.getItemMeta().getLore().get(0); // "Total: <amount>"
+                try {
+                    totalAmount = Integer.parseInt(ChatColor.stripColor(loreLine).split(" ")[1]);
+                } catch (Exception e) {
+                    player.sendMessage(ChatColor.RED + "Error parsing item amount.");
+                    return;
+                }
+            }
+            if (totalAmount > 0) {
+                player.openInventory(plugin.getBundleManager().getCategoryConfirmationGUI(player, material, totalAmount));
+            }
+            return;
+        }
+
+        if (event.getInventory().getHolder() instanceof MinionBundleManager.CategoryConfirmationHolder holder) {
+            event.setCancelled(true);
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+            if (clickedItem.getType() == Material.GREEN_WOOL) {
+                plugin.getBundleManager().withdrawFromBundle(player, holder.getMaterial());
+            } else if (clickedItem.getType() == Material.RED_WOOL) {
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
             }
             return;
         }
