@@ -27,6 +27,63 @@ public class InventoryClick implements Listener {
         this.plugin = plugin;
     }
 
+    // ConfirmationHolder for the target selection confirmation GUI
+    public static class ConfirmationHolder implements InventoryHolder {
+        private final UUID minionUUID;
+        private final Material targetMaterial;
+
+        public ConfirmationHolder(UUID minionUUID, Material targetMaterial) {
+            this.minionUUID = minionUUID;
+            this.targetMaterial = targetMaterial;
+        }
+
+        public UUID getMinionUUID() {
+            return minionUUID;
+        }
+
+        public Material getTargetMaterial() {
+            return targetMaterial;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return null;
+        }
+    }
+
+    private void openConfirmationGUI(Player player, UUID minionUUID, Material targetMaterial) {
+        Inventory confirmationGUI = Bukkit.createInventory(new ConfirmationHolder(minionUUID, targetMaterial), 27, "Confirm Target: " + targetMaterial.name());
+
+        // Add the target block display
+        ItemStack targetBlock = new ItemStack(targetMaterial);
+        ItemMeta targetMeta = targetBlock.getItemMeta();
+        if (targetMeta != null) {
+            targetMeta.setDisplayName(ChatColor.AQUA + targetMaterial.name());
+            targetBlock.setItemMeta(targetMeta);
+        }
+        confirmationGUI.setItem(13, targetBlock);
+
+        // Add the accept button
+        ItemStack accept = new ItemStack(Material.GREEN_WOOL);
+        ItemMeta acceptMeta = accept.getItemMeta();
+        if (acceptMeta != null) {
+            acceptMeta.setDisplayName(ChatColor.GREEN + "Accept");
+            accept.setItemMeta(acceptMeta);
+        }
+        confirmationGUI.setItem(11, accept);
+
+        // Add the deny button
+        ItemStack deny = new ItemStack(Material.RED_WOOL);
+        ItemMeta denyMeta = deny.getItemMeta();
+        if (denyMeta != null) {
+            denyMeta.setDisplayName(ChatColor.RED + "Deny");
+            deny.setItemMeta(denyMeta);
+        }
+        confirmationGUI.setItem(15, deny);
+
+        player.openInventory(confirmationGUI);
+    }
+
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
@@ -199,18 +256,45 @@ public class InventoryClick implements Listener {
                 event.getAction() == InventoryAction.PLACE_SOME) {
 
                 ItemStack cursor = event.getCursor();
-                if (cursor != null && cursor.getType() != Material.AIR) {
-                    Entity entity = Bukkit.getServer().getEntity(holder.getMinionUUID());
-                    if (entity instanceof ArmorStand as) {
-                        as.getPersistentDataContainer().set(plugin.targetKey,
-                            PersistentDataType.STRING, cursor.getType().name());
-                        as.setCustomName(ChatColor.YELLOW + cursor.getType().name() + "Minion");
-                        player.sendMessage(ChatColor.GREEN + "Set minion target to " + cursor.getType().name());
-
-                        Bukkit.getScheduler().runTask(plugin, () -> player.openInventory(new Minion(plugin, as).getActionInventory()));
-                    }
+                if (cursor != null && cursor.getType().isBlock()) {
+                    openConfirmationGUI(player, holder.getMinionUUID(), cursor.getType());
+                }
+                event.setCancelled(true); // Prevent placing the item
+            } else if (event.getCurrentItem() != null && event.getCurrentItem().getType() != Material.AIR) {
+                // Handle clicking on an item already in the inventory
+                if (event.getCurrentItem().getType().isBlock()) {
+                    openConfirmationGUI(player, holder.getMinionUUID(), event.getCurrentItem().getType());
                 }
             }
+        }
+    }
+
+    @EventHandler
+    public void onConfirmationClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (event.getClickedInventory() == null || !(event.getClickedInventory().getHolder() instanceof ConfirmationHolder holder)) return;
+
+        event.setCancelled(true);
+
+        ItemStack clickedItem = event.getCurrentItem();
+        if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+        UUID minionUUID = holder.getMinionUUID();
+        Entity entity = Bukkit.getServer().getEntity(minionUUID);
+        if (!(entity instanceof ArmorStand armorStand)) {
+            player.closeInventory();
+            return;
+        }
+
+        Minion minion = new Minion(plugin, armorStand);
+
+        if (clickedItem.getType() == Material.GREEN_WOOL) {
+            Material targetMaterial = holder.getTargetMaterial();
+            armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, targetMaterial.name());
+            player.sendMessage(ChatColor.GREEN + "Minion target set to " + targetMaterial.name());
+            player.openInventory(minion.getActionInventory());
+        } else if (clickedItem.getType() == Material.RED_WOOL) {
+            player.openInventory(minion.getActionInventory());
         }
     }
 
