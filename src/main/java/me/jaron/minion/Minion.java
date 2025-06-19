@@ -243,12 +243,6 @@ public class Minion {
             return;
         }
 
-        if (targetCrop == Material.SUGAR_CANE) {
-            if (idx == 0 || idx == 2 || idx == 6 || idx == 8) { // Skip corners
-                return;
-            }
-        }
-
         Location loc = minionArmorStand.getLocation();
         Block soilBlock = world.getBlockAt(loc.getBlockX() + (idx % 3) - 1,
                 loc.getBlockY() - 1,
@@ -258,10 +252,12 @@ public class Minion {
 
         switch (currentState) {
             case HOEING:
-                if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK) {
-                    soilBlock.setType(Material.FARMLAND);
-                    minionArmorStand.setCustomName(ChatColor.GREEN + "Hoeing...");
-                    minionArmorStand.swingMainHand();
+                if (targetCrop != Material.NETHER_WART) {
+                    if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK) {
+                        soilBlock.setType(Material.FARMLAND);
+                        minionArmorStand.setCustomName(ChatColor.GREEN + "Hoeing...");
+                        minionArmorStand.swingMainHand();
+                    }
                 }
                 break;
             case PLANTING:
@@ -281,8 +277,6 @@ public class Minion {
                     } else {
                         minionArmorStand.setCustomName(ChatColor.YELLOW + "Waiting to grow");
                     }
-                } else if (cropBlock.getType() == Material.SUGAR_CANE && targetCrop == Material.SUGAR_CANE) {
-                    harvestSugarCane(cropBlock);
                 }
                 // Planting logic
                 else if (cropBlock.getType() == Material.AIR) {
@@ -308,6 +302,14 @@ public class Minion {
         Location loc = minionArmorStand.getLocation();
 
         if (currentState == FarmerState.HOEING) {
+            String targetCropStr = pdc.get(plugin.targetKey, PersistentDataType.STRING);
+            if (targetCropStr != null) {
+                Material targetCrop = Material.valueOf(targetCropStr);
+                if (targetCrop == Material.NETHER_WART) {
+                    pdc.set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.PLANTING.name());
+                    return;
+                }
+            }
             boolean allHoed = true;
             for (int i = 0; i < 9; i++) {
                 if (i == 4) continue;
@@ -372,30 +374,6 @@ public class Minion {
         }
     }
 
-    private void harvestSugarCane(Block baseBlock) {
-        Block blockAbove = baseBlock.getRelative(0, 1, 0);
-        if (blockAbove.getType() == Material.SUGAR_CANE) {
-            minionArmorStand.setCustomName(ChatColor.GREEN + "Harvesting");
-            minionArmorStand.swingMainHand();
-
-            World world = baseBlock.getWorld();
-            Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
-            Inventory chestInv = checkForChest(world, minionArmorStand.getLocation());
-
-            Block currentBlock = blockAbove;
-            while (currentBlock.getType() == Material.SUGAR_CANE) {
-                Collection<ItemStack> drops = currentBlock.getDrops();
-                currentBlock.setType(Material.AIR);
-                for (ItemStack drop : drops) {
-                    addToStorage(drop, storage, chestInv, world, currentBlock.getLocation());
-                }
-                currentBlock = currentBlock.getRelative(0, 1, 0);
-            }
-        } else {
-            minionArmorStand.setCustomName(ChatColor.YELLOW + "Waiting to grow");
-        }
-    }
-
     private void tryPlanting(Block block, Material targetCrop) {
         if (canPlant(block, targetCrop)) {
             Block soilBlock = block.getRelative(0, -1, 0);
@@ -403,7 +381,7 @@ public class Minion {
                 if (soilBlock.getType() != Material.SOUL_SAND) {
                     soilBlock.setType(Material.SOUL_SAND);
                 }
-            } else if (targetCrop != Material.SUGAR_CANE) {
+            } else {
                 if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK) {
                     soilBlock.setType(Material.FARMLAND);
                 }
@@ -419,21 +397,7 @@ public class Minion {
     private boolean canPlant(Block block, Material crop) {
         Block soilBlock = block.getRelative(0, -1, 0);
         Material soil = soilBlock.getType();
-        if (crop == Material.SUGAR_CANE) {
-            if (soil != Material.GRASS_BLOCK && soil != Material.DIRT && soil != Material.SAND && soil != Material.RED_SAND) {
-                return false;
-            }
-            // Check for water adjacent to the soil block
-            for (int x = -1; x <= 1; x++) {
-                for (int z = -1; z <= 1; z++) {
-                    if (x == 0 && z == 0) continue;
-                    if (soilBlock.getRelative(x, 0, z).getType() == Material.WATER) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        } else if (crop == Material.NETHER_WART) {
+        if (crop == Material.NETHER_WART) {
             return soil == Material.SOUL_SAND || soil == Material.DIRT || soil == Material.GRASS_BLOCK;
         } else { // Wheat, carrots, potatoes, beetroot
             return soil == Material.FARMLAND || soil == Material.DIRT || soil == Material.GRASS_BLOCK;

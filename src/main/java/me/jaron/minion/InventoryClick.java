@@ -82,8 +82,22 @@ public class InventoryClick implements Listener {
         inv.setItem(11, new ItemStack(Material.CARROT));
         inv.setItem(12, new ItemStack(Material.POTATO));
         inv.setItem(13, new ItemStack(Material.BEETROOT));
-        inv.setItem(14, new ItemStack(Material.SUGAR_CANE));
-        inv.setItem(15, new ItemStack(Material.NETHER_WART));
+
+        ItemStack sugarCane = new ItemStack(Material.SUGAR_CANE);
+        ItemMeta sugarCaneMeta = sugarCane.getItemMeta();
+        if (sugarCaneMeta != null) {
+            sugarCaneMeta.setLore(List.of(ChatColor.RED + "Sorry that is unavailable at the moment"));
+            sugarCane.setItemMeta(sugarCaneMeta);
+        }
+        inv.setItem(14, sugarCane);
+
+        ItemStack netherWart = new ItemStack(Material.NETHER_WART);
+        ItemMeta netherWartMeta = netherWart.getItemMeta();
+        if (netherWartMeta != null) {
+            netherWartMeta.setLore(List.of(ChatColor.RED + "Sorry that is unavailable at the moment"));
+            netherWart.setItemMeta(netherWartMeta);
+        }
+        inv.setItem(15, netherWart);
         inv.setItem(26, Minion.createBackButton());
         return inv;
     }
@@ -424,7 +438,13 @@ public class InventoryClick implements Listener {
                 return;
             }
 
-            List<Material> validCrops = Arrays.asList(Material.WHEAT, Material.CARROT, Material.POTATO, Material.BEETROOT, Material.SUGAR_CANE, Material.NETHER_WART);
+            if (clickedItem.getType() == Material.SUGAR_CANE || clickedItem.getType() == Material.NETHER_WART) {
+                player.sendMessage(ChatColor.RED + "Sorry that is unavailable at the moment");
+                player.closeInventory();
+                return;
+            }
+
+            List<Material> validCrops = Arrays.asList(Material.WHEAT, Material.CARROT, Material.POTATO, Material.BEETROOT);
             if (validCrops.contains(clickedItem.getType())) {
                 armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, clickedItem.getType().name());
                 if (clickedItem.getType() == Material.NETHER_WART) {
