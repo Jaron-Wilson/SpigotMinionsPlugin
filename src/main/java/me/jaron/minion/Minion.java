@@ -17,6 +17,7 @@ import org.bukkit.World;
 import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.block.data.Ageable;
+import me.jaron.minion.FarmerState;
 
 
 import java.util.ArrayList;
@@ -159,6 +160,9 @@ public class Minion {
         }
 
         pdc.set(plugin.indexKey, PersistentDataType.INTEGER, (idx + 1) % 9);
+        if (idx == 8 && minionType == MinionType.FARMER) {
+            checkFarmerStateTransition();
+        }
     }
 
     private void processBlockMinerCell(Boolean forceMine, int idx) {
@@ -221,6 +225,14 @@ public class Minion {
     private void processFarmerCell(int idx) {
         World world = minionArmorStand.getWorld();
         var pdc = minionArmorStand.getPersistentDataContainer();
+        String stateStr = pdc.getOrDefault(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HARVESTING.name());
+        FarmerState currentState;
+        try {
+            currentState = FarmerState.valueOf(stateStr);
+        } catch (IllegalArgumentException e) {
+            currentState = FarmerState.HARVESTING; // Default state
+        }
+
         String targetStr = pdc.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT.name());
         Material targetCrop;
         try {
@@ -244,29 +256,86 @@ public class Minion {
 
         Block cropBlock = soilBlock.getRelative(0, 1, 0);
 
-        // Harvest logic
-        Material plantableCrop = getPlantableCrop(targetCrop);
-        if (cropBlock.getType() == plantableCrop && cropBlock.getBlockData() instanceof Ageable ageable) {
-            if (ageable.getAge() == ageable.getMaximumAge()) {
-                harvestAndReplant(cropBlock, targetCrop);
-            } else {
-                minionArmorStand.setCustomName(ChatColor.YELLOW + "Waiting to grow");
-            }
-        } else if (cropBlock.getType() == Material.SUGAR_CANE && targetCrop == Material.SUGAR_CANE) {
-            harvestSugarCane(cropBlock);
-        }
-        // Planting logic
-        else if (cropBlock.getType() == Material.AIR) {
-            // canPlant checks the soil, so we pass the cropBlock
-            if (canPlant(cropBlock, targetCrop)) {
-                tryPlanting(cropBlock, targetCrop);
-            } else {
-                minionArmorStand.setCustomName(ChatColor.RED + "Cannot plant here");
-            }
-        } else if (cropBlock.getType() != Material.AIR) {
-            minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + cropBlock.getType());
+        switch (currentState) {
+            case HOEING:
+                if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK) {
+                    soilBlock.setType(Material.FARMLAND);
+                    minionArmorStand.setCustomName(ChatColor.GREEN + "Hoeing...");
+                    minionArmorStand.swingMainHand();
+                }
+                break;
+            case PLANTING:
+                if (cropBlock.getType() == Material.AIR && soilBlock.getType() == Material.FARMLAND) {
+                    if (canPlant(cropBlock, targetCrop)) {
+                        tryPlanting(cropBlock, targetCrop);
+                        minionArmorStand.setCustomName(ChatColor.GREEN + "Planting...");
+                    }
+                }
+                break;
+            case HARVESTING:
+                // Harvest logic
+                Material plantableCrop = getPlantableCrop(targetCrop);
+                if (cropBlock.getType() == plantableCrop && cropBlock.getBlockData() instanceof Ageable ageable) {
+                    if (ageable.getAge() == ageable.getMaximumAge()) {
+                        harvestAndReplant(cropBlock, targetCrop);
+                    } else {
+                        minionArmorStand.setCustomName(ChatColor.YELLOW + "Waiting to grow");
+                    }
+                } else if (cropBlock.getType() == Material.SUGAR_CANE && targetCrop == Material.SUGAR_CANE) {
+                    harvestSugarCane(cropBlock);
+                }
+                // Planting logic
+                else if (cropBlock.getType() == Material.AIR) {
+                    // canPlant checks the soil, so we pass the cropBlock
+                    if (canPlant(cropBlock, targetCrop)) {
+                        tryPlanting(cropBlock, targetCrop);
+                    } else {
+                        minionArmorStand.setCustomName(ChatColor.RED + "Cannot plant here");
+                    }
+                } else if (cropBlock.getType() != Material.AIR) {
+                    minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + cropBlock.getType());
+                }
+                break;
         }
         minionArmorStand.setCustomNameVisible(true);
+    }
+
+    private void checkFarmerStateTransition() {
+        var pdc = minionArmorStand.getPersistentDataContainer();
+        String stateStr = pdc.getOrDefault(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HARVESTING.name());
+        FarmerState currentState = FarmerState.valueOf(stateStr);
+        World world = minionArmorStand.getWorld();
+        Location loc = minionArmorStand.getLocation();
+
+        if (currentState == FarmerState.HOEING) {
+            boolean allHoed = true;
+            for (int i = 0; i < 9; i++) {
+                if (i == 4) continue;
+                Block currentSoil = world.getBlockAt(loc.getBlockX() + (i % 3) - 1, loc.getBlockY() - 1, loc.getBlockZ() + (i / 3) - 1);
+                if (currentSoil.getType() != Material.FARMLAND) {
+                    allHoed = false;
+                    break;
+                }
+            }
+            if (allHoed) {
+                pdc.set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.PLANTING.name());
+            }
+        } else if (currentState == FarmerState.PLANTING) {
+            boolean allPlanted = true;
+            for (int i = 0; i < 9; i++) {
+                if (i == 4) continue;
+                Block currentCropBlock = world.getBlockAt(loc.getBlockX() + (i % 3) - 1, loc.getBlockY(), loc.getBlockZ() + (i / 3) - 1);
+                Material targetCrop = Material.valueOf(pdc.get(plugin.targetKey, PersistentDataType.STRING));
+                Material plantableCrop = getPlantableCrop(targetCrop);
+                if (currentCropBlock.getType() != plantableCrop) {
+                    allPlanted = false;
+                    break;
+                }
+            }
+            if (allPlanted) {
+                pdc.set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HARVESTING.name());
+            }
+        }
     }
 
     private void harvestAndReplant(Block block, Material targetCrop) {

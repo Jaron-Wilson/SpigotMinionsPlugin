@@ -39,6 +39,9 @@ public class MinionPlugin extends JavaPlugin {
     public final NamespacedKey targetKey = new NamespacedKey(this, "minion_target");
     public final NamespacedKey minionTypeKey = new NamespacedKey(this, "minion_type");
     public final NamespacedKey wantsSeedsKey = new NamespacedKey(this, "minion_wants_seeds");
+    public final NamespacedKey farmerStateKey = new NamespacedKey(this, "farmer_state");
+
+    private static MinionPlugin instance;
 
     private final Set<UUID> automationPlayers = new HashSet<>();
     private final Map<UUID, Inventory> minionInventories = new HashMap<>();

@@ -16,6 +16,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import me.jaron.minion.FarmerState;
 
 import java.util.Arrays;
 import java.util.List;
@@ -374,9 +375,13 @@ public class InventoryClick implements Listener {
                 player.openInventory(minion.getActionInventory());
             } else if (displayName.equals(ChatColor.YELLOW + "Set Target") ||
                        displayName.startsWith(ChatColor.AQUA + "Target: ")) {
-                Inventory targetSelect = Bukkit.createInventory(new TargetSelectHolder(minionUUID), 9, "Select Target Block");
-                targetSelect.setItem(8, Minion.createBackButton());  // Add back button to target selection
-                player.openInventory(targetSelect);
+                String minionTypeStr = armorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+                MinionType minionType = MinionType.valueOf(minionTypeStr);
+                if (minionType == MinionType.FARMER) {
+                    player.openInventory(getFarmerTargetSelectGUI(minionUUID));
+                } else {
+                    player.openInventory(getTargetSelectGUI(minionUUID));
+                }
             }
         }
 
@@ -399,6 +404,37 @@ public class InventoryClick implements Listener {
                 collector.onCommand(player, null, "", new String[]{});
             }
             return;
+        }
+
+        // Handle Farmer Target Select clicks
+        if(event.getClickedInventory().getHolder() instanceof FarmerTargetSelectHolder holder) {
+            event.setCancelled(true);
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem == null || clickedItem.getType().isAir()) return;
+
+            UUID minionUUID = holder.getMinionUUID();
+            Entity entity = Bukkit.getServer().getEntity(minionUUID);
+            if (!(entity instanceof ArmorStand armorStand)) {
+                player.closeInventory();
+                return;
+            }
+
+            if (clickedItem.getType() == Material.BARRIER) {
+                player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+                return;
+            }
+
+            List<Material> validCrops = Arrays.asList(Material.WHEAT, Material.CARROT, Material.POTATO, Material.BEETROOT, Material.SUGAR_CANE, Material.NETHER_WART);
+            if (validCrops.contains(clickedItem.getType())) {
+                armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, clickedItem.getType().name());
+                if (clickedItem.getType() == Material.NETHER_WART) {
+                    armorStand.getPersistentDataContainer().set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.PLACING_SOUL_SAND.name());
+                } else {
+                    armorStand.getPersistentDataContainer().set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HOEING.name());
+                }
+                player.sendMessage(ChatColor.GREEN + "Minion target set to " + clickedItem.getType().name());
+                player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+            }
         }
     }
 
@@ -454,6 +490,7 @@ public class InventoryClick implements Listener {
         }
     }
 
+    /*
     @EventHandler
     public void onFarmerTargetSelectClick(InventoryClickEvent event) {
         if (!(event.getInventory().getHolder() instanceof FarmerTargetSelectHolder holder)) return;
@@ -482,6 +519,7 @@ public class InventoryClick implements Listener {
             player.openInventory(new Minion(plugin, armorStand).getActionInventory());
         }
     }
+    */
 
     @EventHandler
     public void onTypeConfirmationClick(InventoryClickEvent event) {
@@ -510,12 +548,16 @@ public class InventoryClick implements Listener {
                 armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
             } else { // FARMER
                 armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT.name());
+                armorStand.getPersistentDataContainer().set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HOEING.name());
             }
             player.sendMessage(ChatColor.GREEN + "Minion type switched to " + newType.name());
-            player.openInventory(minion.getActionInventory());
+            if (newType == MinionType.FARMER) {
+                player.openInventory(getFarmerTargetSelectGUI(minionUUID));
+            } else {
+                player.openInventory(minion.getActionInventory());
+            }
         } else if (clickedItem.getType() == Material.RED_WOOL) {
             player.openInventory(minion.getActionInventory());
         }
     }
 }
-
