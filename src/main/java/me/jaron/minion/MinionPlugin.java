@@ -37,6 +37,8 @@ public class MinionPlugin extends JavaPlugin {
     public final NamespacedKey modeKey = new NamespacedKey(this, "minion_mode");
     public final NamespacedKey indexKey = new NamespacedKey(this, "minion_index");
     public final NamespacedKey targetKey = new NamespacedKey(this, "minion_target");
+    public final NamespacedKey minionTypeKey = new NamespacedKey(this, "minion_type");
+    public final NamespacedKey wantsSeedsKey = new NamespacedKey(this, "minion_wants_seeds");
 
     private final Set<UUID> automationPlayers = new HashSet<>();
     private final Map<UUID, Inventory> minionInventories = new HashMap<>();
@@ -122,6 +124,8 @@ public class MinionPlugin extends JavaPlugin {
             as.getPersistentDataContainer().set(modeKey, PersistentDataType.BYTE, (byte) 0);
             as.getPersistentDataContainer().set(indexKey, PersistentDataType.INTEGER, 0);
             as.getPersistentDataContainer().set(targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
+            as.getPersistentDataContainer().set(minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+            as.getPersistentDataContainer().set(wantsSeedsKey, PersistentDataType.BYTE, (byte) 1); // default to true
 
             // auto-start if owner has automation active
             if (automationPlayers.contains(owner.getUniqueId())) {
