@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.World;
 
 public class MinionPlugin extends JavaPlugin {
 
@@ -45,7 +46,12 @@ public class MinionPlugin extends JavaPlugin {
 
     private final Set<UUID> automationPlayers = new HashSet<>();
     private final Map<UUID, Inventory> minionInventories = new HashMap<>();
+    private final Map<UUID, List<Minion>> minions = new HashMap<>();
     private MinionBundleManager bundleManager;
+
+    public Map<UUID, List<Minion>> getMinions() {
+        return minions;
+    }
 
     public Inventory getMinionStorage(UUID uuid) {
         return minionInventories.computeIfAbsent(uuid, u -> {
@@ -74,6 +80,7 @@ public class MinionPlugin extends JavaPlugin {
 
         // Load all saved data
         loadAllData();
+        loadMinions();
 
         // Register event listeners
         getServer().getPluginManager().registerEvents(new ArmorStandClicked(this), this);
@@ -130,6 +137,9 @@ public class MinionPlugin extends JavaPlugin {
             as.getPersistentDataContainer().set(minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
             as.getPersistentDataContainer().set(wantsSeedsKey, PersistentDataType.BYTE, (byte) 1); // default to true
 
+            Minion minion = new Minion(this, as);
+            minions.computeIfAbsent(owner.getUniqueId(), k -> new ArrayList<>()).add(minion);
+
             // auto-start if owner has automation active
             if (automationPlayers.contains(owner.getUniqueId())) {
                 new Minion(this, as).startAutomation();
@@ -146,6 +156,18 @@ public class MinionPlugin extends JavaPlugin {
     public void setAutomationActive(UUID player, boolean active) {
         if (active) automationPlayers.add(player);
         else automationPlayers.remove(player);
+    }
+
+    public void removeMinion(Player owner, ArmorStand armorStand) {
+        UUID ownerUUID = owner.getUniqueId();
+        minionInventories.remove(armorStand.getUniqueId());
+
+        List<Minion> playerMinions = minions.get(ownerUUID);
+        if (playerMinions != null) {
+            playerMinions.removeIf(minion -> minion.getLocation().equals(armorStand.getLocation()));
+        }
+
+        armorStand.remove();
     }
 
     @Override
@@ -262,6 +284,28 @@ public class MinionPlugin extends JavaPlugin {
             YamlConfiguration bundleConfig = YamlConfiguration.loadConfiguration(bundleStorage);
             bundleManager.loadData(bundleConfig);
             getLogger().info("Successfully loaded bundle data!");
+        }
+    }
+
+    private void loadMinions() {
+        minions.clear();
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (entity instanceof ArmorStand as) {
+                    if (as.getPersistentDataContainer().has(isMinionKey, PersistentDataType.BYTE)) {
+                        String ownerUUIDString = as.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+                        if (ownerUUIDString != null) {
+                            try {
+                                UUID ownerUUID = UUID.fromString(ownerUUIDString);
+                                Minion minion = new Minion(this, as);
+                                minions.computeIfAbsent(ownerUUID, k -> new ArrayList<>()).add(minion);
+                            } catch (IllegalArgumentException e) {
+                                getLogger().warning("Invalid owner UUID on minion: " + ownerUUIDString);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

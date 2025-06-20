@@ -2,6 +2,7 @@ package me.jaron.minion;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
@@ -10,7 +11,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.ConfigurationSection;
@@ -23,6 +23,7 @@ public class MinionBundleManager {
     private final Map<UUID, List<ItemStack>> bundleContents = new HashMap<>();
     private final Map<UUID, Integer> rawItemsCurrentPage = new HashMap<>();
     private final Map<UUID, Integer> categoriesCurrentPage = new HashMap<>();
+    private final Map<UUID, Integer> minionsCurrentPage = new HashMap<>();
     private final Map<UUID, BundleView> playerBundleView = new HashMap<>();
 
     private final NamespacedKey bundleKey;
@@ -30,7 +31,8 @@ public class MinionBundleManager {
 
     public enum BundleView {
         RAW_ITEMS,
-        CATEGORIES
+        CATEGORIES,
+        MINIONS
     }
 
     public MinionBundleManager(MinionPlugin plugin) {
@@ -51,11 +53,14 @@ public class MinionBundleManager {
         bundleContents.putIfAbsent(player.getUniqueId(), new ArrayList<>());
         rawItemsCurrentPage.putIfAbsent(player.getUniqueId(), 0);
         categoriesCurrentPage.putIfAbsent(player.getUniqueId(), 0);
+        minionsCurrentPage.putIfAbsent(player.getUniqueId(), 0);
     }
 
     public boolean isBundle(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return false;
-        return item.getItemMeta().getPersistentDataContainer().has(bundleKey, PersistentDataType.BYTE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return false;
+        return meta.getPersistentDataContainer().has(bundleKey, PersistentDataType.BYTE);
     }
 
     public void openBundle(Player player) {
@@ -92,7 +97,7 @@ public class MinionBundleManager {
 
         List<Map.Entry<Material, Integer>> sortedCategories = categoryCounts.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(Comparator.comparing(Enum::name)))
-                .collect(Collectors.toList());
+                .toList();
 
         int page = categoriesCurrentPage.computeIfAbsent(player.getUniqueId(), k -> 0);
         int totalPages = Math.max(1, (int) Math.ceil(sortedCategories.size() / (double) ITEMS_PER_PAGE));
@@ -105,19 +110,73 @@ public class MinionBundleManager {
             Map.Entry<Material, Integer> entry = sortedCategories.get(startIndex + i);
             ItemStack displayItem = new ItemStack(entry.getKey());
             ItemMeta meta = displayItem.getItemMeta();
-            meta.setDisplayName(ChatColor.AQUA + formatMaterialName(entry.getKey()));
-            meta.setLore(Arrays.asList(
-                    ChatColor.GRAY + "Total: " + ChatColor.YELLOW + entry.getValue(),
-                    "",
-                    ChatColor.GREEN + "Click to withdraw."
-            ));
-            meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
-            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
-            displayItem.setItemMeta(meta);
+            if (meta != null) {
+                meta.setDisplayName(ChatColor.AQUA + formatMaterialName(entry.getKey()));
+                meta.setLore(Arrays.asList(
+                        ChatColor.GRAY + "Total: " + ChatColor.YELLOW + entry.getValue(),
+                        "",
+                        ChatColor.GREEN + "Click to withdraw."
+                ));
+                meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
+                meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+                displayItem.setItemMeta(meta);
+            }
             inv.setItem(i, displayItem);
         }
 
         setupNavigationButtons(inv, page, totalPages, BundleView.CATEGORIES);
+        return inv;
+    }
+
+    public Inventory getMinionsInventory(Player player) {
+        playerBundleView.put(player.getUniqueId(), BundleView.MINIONS);
+        List<Minion> minions = plugin.getMinions().get(player.getUniqueId());
+        if (minions == null) {
+            minions = new ArrayList<>();
+        }
+
+        int page = minionsCurrentPage.computeIfAbsent(player.getUniqueId(), k -> 0);
+        int totalPages = Math.max(1, (int) Math.ceil(minions.size() / (double) ITEMS_PER_PAGE));
+
+        Inventory inv = Bukkit.createInventory(new MinionsHolder(player.getUniqueId()), 54,
+                ChatColor.DARK_AQUA + "My Minions " + ChatColor.GRAY + "(Page " + (page + 1) + "/" + totalPages + ")");
+
+        int startIndex = page * ITEMS_PER_PAGE;
+        for (int i = 0; i < ITEMS_PER_PAGE && startIndex + i < minions.size(); i++) {
+            Minion minion = minions.get(startIndex + i);
+            Material targetMaterial = minion.getTargetMaterial();
+            ItemStack minionItem;
+            if (targetMaterial.isItem()) {
+                minionItem = new ItemStack(targetMaterial);
+            } else {
+                minionItem = new ItemStack(Material.BARRIER);
+            }
+            ItemMeta meta = minionItem.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName(ChatColor.AQUA + "Minion " + (startIndex + i + 1));
+                Location minionLoc = minion.getLocation();
+                double distance = -1;
+                if (player.getWorld().equals(minionLoc.getWorld())) {
+                    distance = player.getLocation().distance(minionLoc);
+                }
+
+                List<String> lore = new ArrayList<>();
+                lore.add(ChatColor.GRAY + "Type: " + ChatColor.YELLOW + minion.getMinionType().name());
+                lore.add(ChatColor.GRAY + "Location: " + ChatColor.YELLOW + minionLoc.getBlockX() + ", " + minionLoc.getBlockY() + ", " + minionLoc.getBlockZ());
+                if (distance != -1) {
+                    lore.add(ChatColor.GRAY + "Distance: " + ChatColor.YELLOW + String.format("%.1f", distance) + " blocks");
+                } else {
+                    lore.add(ChatColor.GRAY + "Distance: " + ChatColor.YELLOW + "Different world");
+                }
+                lore.add("");
+                lore.add(ChatColor.GREEN + "Click for options.");
+                meta.setLore(lore);
+                minionItem.setItemMeta(meta);
+            }
+            inv.setItem(i, minionItem);
+        }
+
+        setupNavigationButtons(inv, page, totalPages, BundleView.MINIONS);
         return inv;
     }
 
@@ -126,21 +185,27 @@ public class MinionBundleManager {
 
         ItemStack displayItem = new ItemStack(material);
         ItemMeta meta = displayItem.getItemMeta();
-        meta.setDisplayName(ChatColor.AQUA + formatMaterialName(material));
-        meta.setLore(Collections.singletonList(ChatColor.GRAY + "Amount: " + ChatColor.YELLOW + totalAmount));
-        displayItem.setItemMeta(meta);
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.AQUA + formatMaterialName(material));
+            meta.setLore(Collections.singletonList(ChatColor.GRAY + "Amount: " + ChatColor.YELLOW + totalAmount));
+            displayItem.setItemMeta(meta);
+        }
         inv.setItem(13, displayItem);
 
         ItemStack confirm = new ItemStack(Material.GREEN_WOOL);
         ItemMeta confirmMeta = confirm.getItemMeta();
-        confirmMeta.setDisplayName(ChatColor.GREEN + "Confirm");
-        confirm.setItemMeta(confirmMeta);
+        if (confirmMeta != null) {
+            confirmMeta.setDisplayName(ChatColor.GREEN + "Confirm");
+            confirm.setItemMeta(confirmMeta);
+        }
         inv.setItem(11, confirm);
 
         ItemStack cancel = new ItemStack(Material.RED_WOOL);
         ItemMeta cancelMeta = cancel.getItemMeta();
-        cancelMeta.setDisplayName(ChatColor.RED + "Cancel");
-        cancel.setItemMeta(cancelMeta);
+        if (cancelMeta != null) {
+            cancelMeta.setDisplayName(ChatColor.RED + "Cancel");
+            cancel.setItemMeta(cancelMeta);
+        }
         inv.setItem(15, cancel);
 
         return inv;
@@ -249,6 +314,17 @@ public class MinionBundleManager {
             inv.setItem(48, catViewButton);
         }
 
+        if (currentView != BundleView.MINIONS) {
+            ItemStack minionsButton = new ItemStack(Material.CREEPER_HEAD);
+            ItemMeta minionsMeta = minionsButton.getItemMeta();
+            if (minionsMeta != null) {
+                minionsMeta.setDisplayName(ChatColor.DARK_AQUA + "My Minions");
+                minionsMeta.setLore(Collections.singletonList(ChatColor.GRAY + "Click to view and teleport to your minions."));
+                minionsButton.setItemMeta(minionsMeta);
+            }
+            inv.setItem(50, minionsButton);
+        }
+
         ItemStack collectButton = new ItemStack(Material.HOPPER);
         ItemMeta meta = collectButton.getItemMeta();
         if (meta != null) {
@@ -294,15 +370,19 @@ public class MinionBundleManager {
 
     public void nextPage(Player player) {
         BundleView view = playerBundleView.getOrDefault(player.getUniqueId(), BundleView.CATEGORIES);
-        Map<UUID, Integer> pageMap = view == BundleView.RAW_ITEMS ? rawItemsCurrentPage : categoriesCurrentPage;
+        Map<UUID, Integer> pageMap = view == BundleView.RAW_ITEMS ? rawItemsCurrentPage : view == BundleView.CATEGORIES ? categoriesCurrentPage : minionsCurrentPage;
         int current = pageMap.getOrDefault(player.getUniqueId(), 0);
         pageMap.put(player.getUniqueId(), current + 1);
         refreshInventory(player);
     }
 
+    public int getMinionsCurrentPage(UUID playerUUID) {
+        return minionsCurrentPage.getOrDefault(playerUUID, 0);
+    }
+
     public void previousPage(Player player) {
         BundleView view = playerBundleView.getOrDefault(player.getUniqueId(), BundleView.CATEGORIES);
-        Map<UUID, Integer> pageMap = view == BundleView.RAW_ITEMS ? rawItemsCurrentPage : categoriesCurrentPage;
+        Map<UUID, Integer> pageMap = view == BundleView.RAW_ITEMS ? rawItemsCurrentPage : view == BundleView.CATEGORIES ? categoriesCurrentPage : minionsCurrentPage;
         int current = pageMap.getOrDefault(player.getUniqueId(), 0);
         if (current > 0) {
             pageMap.put(player.getUniqueId(), current - 1);
@@ -319,6 +399,9 @@ public class MinionBundleManager {
             case CATEGORIES:
                 player.openInventory(getCategoriesInventory(player));
                 break;
+            case MINIONS:
+                player.openInventory(getMinionsInventory(player));
+                break;
         }
     }
 
@@ -330,6 +413,11 @@ public class MinionBundleManager {
     public void openCategoriesView(Player player) {
         playerBundleView.put(player.getUniqueId(), BundleView.CATEGORIES);
         player.openInventory(getCategoriesInventory(player));
+    }
+
+    public void openMinionsView(Player player) {
+        playerBundleView.put(player.getUniqueId(), BundleView.MINIONS);
+        player.openInventory(getMinionsInventory(player));
     }
 
     public void saveData(YamlConfiguration config) {
@@ -378,14 +466,21 @@ public class MinionBundleManager {
         private final UUID playerUUID;
         public RawItemsHolder(UUID playerUUID) { this.playerUUID = playerUUID; }
         public UUID getPlayerUUID() { return playerUUID; }
-        @Override public Inventory getInventory() { return null; }
+        @Override public Inventory getInventory() { return Bukkit.createInventory(this, 0); }
     }
 
     public static class CategoriesHolder implements org.bukkit.inventory.InventoryHolder {
         private final UUID playerUUID;
         public CategoriesHolder(UUID playerUUID) { this.playerUUID = playerUUID; }
         public UUID getPlayerUUID() { return playerUUID; }
-        @Override public Inventory getInventory() { return null; }
+        @Override public Inventory getInventory() { return Bukkit.createInventory(this, 0); }
+    }
+
+    public static class MinionsHolder implements org.bukkit.inventory.InventoryHolder {
+        private final UUID playerUUID;
+        public MinionsHolder(UUID playerUUID) { this.playerUUID = playerUUID; }
+        public UUID getPlayerUUID() { return playerUUID; }
+        @Override public Inventory getInventory() { return Bukkit.createInventory(this, 0); }
     }
 
     public static class CategoryConfirmationHolder implements org.bukkit.inventory.InventoryHolder {
@@ -400,6 +495,6 @@ public class MinionBundleManager {
         public UUID getPlayerUUID() { return playerUUID; }
         public Material getMaterial() { return material; }
         public int getAmount() { return amount; }
-        @Override public Inventory getInventory() { return null; }
+        @Override public Inventory getInventory() { return Bukkit.createInventory(this, 0); }
     }
 }

@@ -2,6 +2,7 @@ package me.jaron.minion;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
@@ -18,9 +19,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import me.jaron.minion.FarmerState;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 public class InventoryClick implements Listener {
 
@@ -63,6 +62,8 @@ public class InventoryClick implements Listener {
             player.openInventory(minion.getMinionStorage());
         } else if (clickedItem.getType() == Material.BARRIER) {
             player.closeInventory();
+        } else if (event.getSlot() == 5) { // Remove Minion
+            openRemovalConfirmationGUI(player, minionUUID);
         } else if (event.getSlot() == 7) { // Target selection
             if (minionType == MinionType.FARMER) {
                 player.openInventory(getFarmerTargetSelectGUI(minionUUID));
@@ -153,6 +154,23 @@ public class InventoryClick implements Listener {
 
         public MinionType getNewType() {
             return newType;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return null;
+        }
+    }
+
+    public static class RemovalConfirmationHolder implements InventoryHolder {
+        private final UUID minionUUID;
+
+        public RemovalConfirmationHolder(UUID minionUUID) {
+            this.minionUUID = minionUUID;
+        }
+
+        public UUID getMinionUUID() {
+            return minionUUID;
         }
 
         @Override
@@ -255,6 +273,24 @@ public class InventoryClick implements Listener {
         player.openInventory(confirmationGUI);
     }
 
+    private void openRemovalConfirmationGUI(Player player, UUID minionUUID) {
+        Inventory confirmationGUI = Bukkit.createInventory(new RemovalConfirmationHolder(minionUUID), 27, "Confirm Minion Removal");
+
+        ItemStack confirm = new ItemStack(Material.GREEN_WOOL);
+        ItemMeta confirmMeta = confirm.getItemMeta();
+        confirmMeta.setDisplayName(ChatColor.GREEN + "Confirm");
+        confirm.setItemMeta(confirmMeta);
+        confirmationGUI.setItem(11, confirm);
+
+        ItemStack cancel = new ItemStack(Material.RED_WOOL);
+        ItemMeta cancelMeta = cancel.getItemMeta();
+        cancelMeta.setDisplayName(ChatColor.RED + "Cancel");
+        cancel.setItemMeta(cancelMeta);
+        confirmationGUI.setItem(15, cancel);
+
+        player.openInventory(confirmationGUI);
+    }
+
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
@@ -263,7 +299,10 @@ public class InventoryClick implements Listener {
         // Cancel any click in a minion inventory or storage
         if (event.getInventory().getHolder() instanceof Minion.MinionInventoryHolder ||
             event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder ||
-            event.getInventory().getHolder() instanceof TargetSelectHolder) {
+            event.getInventory().getHolder() instanceof TargetSelectHolder ||
+            event.getInventory().getHolder() instanceof MinionBundleManager.RawItemsHolder ||
+            event.getInventory().getHolder() instanceof MinionBundleManager.CategoriesHolder ||
+            event.getInventory().getHolder() instanceof MinionBundleManager.MinionsHolder) {
             event.setCancelled(true);
 
             // Handle back button click
@@ -412,6 +451,8 @@ public class InventoryClick implements Listener {
                 plugin.getBundleManager().previousPage(player);
             } else if (displayName.equals(ChatColor.GREEN + "View Categories")) {
                 plugin.getBundleManager().openCategoriesView(player);
+            } else if (displayName.equals(ChatColor.DARK_AQUA + "My Minions")) {
+                plugin.getBundleManager().openMinionsView(player);
             } else if (displayName.equals(ChatColor.GREEN + "Collect All")) {
                 CollectAllCommand collectAll = new CollectAllCommand(plugin);
                 int collected = collectAll.collectAllForPlayer(player);
@@ -440,6 +481,9 @@ public class InventoryClick implements Listener {
                     return;
                 } else if (displayName.equals(ChatColor.AQUA + "View Raw Items")) {
                     plugin.getBundleManager().openRawItemsView(player);
+                    return;
+                } else if (displayName.equals(ChatColor.DARK_AQUA + "My Minions")) {
+                    plugin.getBundleManager().openMinionsView(player);
                     return;
                 } else if (displayName.equals(ChatColor.GREEN + "Collect All")) {
                     CollectAllCommand collectAll = new CollectAllCommand(plugin);
@@ -472,53 +516,71 @@ public class InventoryClick implements Listener {
             return;
         }
 
-        if (event.getInventory().getHolder() instanceof MinionBundleManager.CategoryConfirmationHolder holder) {
+        if (event.getInventory().getHolder() instanceof MinionBundleManager.MinionsHolder) {
+            event.setCancelled(true);
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+            if (clickedItem.hasItemMeta()) {
+                String displayName = clickedItem.getItemMeta().getDisplayName();
+                if (displayName.equals(ChatColor.YELLOW + "Next Page")) {
+                    plugin.getBundleManager().nextPage(player);
+                } else if (displayName.equals(ChatColor.YELLOW + "Previous Page")) {
+                    plugin.getBundleManager().previousPage(player);
+                } else if (displayName.equals(ChatColor.GREEN + "View Categories")) {
+                    plugin.getBundleManager().openCategoriesView(player);
+                } else if (displayName.equals(ChatColor.GREEN + "Collect All")) {
+                    CollectAllCommand collectAll = new CollectAllCommand(plugin);
+                    int collected = collectAll.collectAllForPlayer(player);
+                    if (collected > 0) {
+                        player.sendMessage(ChatColor.GREEN + "Collected " + collected + " items!");
+                        plugin.getBundleManager().refreshInventory(player);
+                    } else {
+                        player.sendMessage(ChatColor.YELLOW + "No items to collect!");
+                    }
+                } else {
+                    int clickedSlot = event.getSlot();
+                    int page = plugin.getBundleManager().getMinionsCurrentPage(player.getUniqueId());
+                    int minionIndex = (page * 45) + clickedSlot;
+                    List<Minion> minions = plugin.getMinions().get(player.getUniqueId());
+
+                    if (minions != null && minionIndex < minions.size()) {
+                        Minion clickedMinion = minions.get(minionIndex);
+                        openMinionOptionsGUI(player, clickedMinion.getUUID());
+                    }
+                }
+            }
+            return;
+        }
+
+        if (event.getInventory().getHolder() instanceof MinionOptionsHolder holder) {
+            event.setCancelled(true);
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+            if (clickedItem.getType() == Material.ENDER_PEARL) {
+                openTeleportConfirmationGUI(player, holder.getMinionUUID());
+            } else if (clickedItem.getType() == Material.BARRIER) {
+                openRemovalConfirmationGUI(player, holder.getMinionUUID());
+            } else if (clickedItem.getType() == Material.ARROW) {
+                player.openInventory(plugin.getBundleManager().getMinionsInventory(player));
+            }
+        }
+
+        if (event.getInventory().getHolder() instanceof TeleportConfirmationHolder holder) {
             event.setCancelled(true);
             ItemStack clickedItem = event.getCurrentItem();
             if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
             if (clickedItem.getType() == Material.GREEN_WOOL) {
-                plugin.getBundleManager().withdrawFromBundle(player, holder.getMaterial());
-            } else if (clickedItem.getType() == Material.RED_WOOL) {
-                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
-            }
-            return;
-        }
-
-        // Handle Farmer Target Select clicks
-        if(event.getClickedInventory().getHolder() instanceof FarmerTargetSelectHolder holder) {
-            event.setCancelled(true);
-            ItemStack clickedItem = event.getCurrentItem();
-            if (clickedItem == null || clickedItem.getType().isAir()) return;
-
-            UUID minionUUID = holder.getMinionUUID();
-            Entity entity = Bukkit.getServer().getEntity(minionUUID);
-            if (!(entity instanceof ArmorStand armorStand)) {
-                player.closeInventory();
-                return;
-            }
-
-            if (clickedItem.getType() == Material.BARRIER) {
-                player.openInventory(new Minion(plugin, armorStand).getActionInventory());
-                return;
-            }
-
-            if (clickedItem.getType() == Material.SUGAR_CANE || clickedItem.getType() == Material.NETHER_WART) {
-                player.sendMessage(ChatColor.RED + "Sorry that is unavailable at the moment");
-                player.closeInventory();
-                return;
-            }
-
-            List<Material> validCrops = Arrays.asList(Material.WHEAT, Material.CARROT, Material.POTATO, Material.BEETROOT);
-            if (validCrops.contains(clickedItem.getType())) {
-                armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, clickedItem.getType().name());
-                if (clickedItem.getType() == Material.NETHER_WART) {
-                    armorStand.getPersistentDataContainer().set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.PLACING_SOUL_SAND.name());
-                } else {
-                    armorStand.getPersistentDataContainer().set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HOEING.name());
+                Entity entity = Bukkit.getServer().getEntity(holder.getMinionUUID());
+                if (entity != null) {
+                    player.teleport(entity.getLocation());
+                    player.sendMessage(ChatColor.GREEN + "Teleported to minion!");
+                    player.closeInventory();
                 }
-                player.sendMessage(ChatColor.GREEN + "Minion target set to " + clickedItem.getType().name());
-                player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+            } else if (clickedItem.getType() == Material.RED_WOOL) {
+                openMinionOptionsGUI(player, holder.getMinionUUID());
             }
         }
     }
@@ -575,36 +637,133 @@ public class InventoryClick implements Listener {
         }
     }
 
-    /*
     @EventHandler
-    public void onFarmerTargetSelectClick(InventoryClickEvent event) {
-        if (!(event.getInventory().getHolder() instanceof FarmerTargetSelectHolder holder)) return;
+    public void onRemovalConfirmationClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (event.getClickedInventory() == null || !(event.getClickedInventory().getHolder() instanceof RemovalConfirmationHolder holder)) return;
 
         event.setCancelled(true);
+
         ItemStack clickedItem = event.getCurrentItem();
         if (clickedItem == null || clickedItem.getType().isAir()) return;
 
         UUID minionUUID = holder.getMinionUUID();
         Entity entity = Bukkit.getServer().getEntity(minionUUID);
-        if (!(entity instanceof ArmorStand armorStand)) {
-            player.closeInventory();
-            return;
-        }
 
-        if (clickedItem.getType() == Material.BARRIER) {
-            player.openInventory(new Minion(plugin, armorStand).getActionInventory());
-            return;
-        }
+        if (clickedItem.getType() == Material.GREEN_WOOL) {
+            if (entity instanceof ArmorStand armorStand) {
+                Minion minion = new Minion(plugin, armorStand);
+                Inventory minionInv = minion.getMinionStorage();
+                List<ItemStack> itemsToCollect = new ArrayList<>();
+                for (ItemStack item : minionInv.getContents()) {
+                    if (item != null && item.getType() != Material.BARRIER && item.getType() != Material.HOPPER) {
+                        itemsToCollect.add(item);
+                    }
+                }
 
-        List<Material> validCrops = Arrays.asList(Material.WHEAT, Material.CARROT, Material.POTATO, Material.BEETROOT, Material.SUGAR_CANE, Material.NETHER_WART);
-        if (validCrops.contains(clickedItem.getType())) {
-            armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, clickedItem.getType().name());
-            player.sendMessage(ChatColor.GREEN + "Minion target set to " + clickedItem.getType().name());
-            player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+                for (ItemStack item : itemsToCollect) {
+                    HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(item);
+                    if (!remaining.isEmpty()) {
+                        plugin.getBundleManager().addItemToBundle(player, remaining.get(0));
+                        player.sendMessage(ChatColor.YELLOW + "Some items could not fit in your inventory and were added to your bundle.");
+                    }
+                }
+
+                plugin.removeMinion(player, armorStand);
+                player.sendMessage(ChatColor.GREEN + "Minion removed.");
+                player.closeInventory();
+            }
+        } else if (clickedItem.getType() == Material.RED_WOOL) {
+            if (entity instanceof ArmorStand armorStand) {
+                player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+            }
         }
     }
-    */
+
+    private void openMinionOptionsGUI(Player player, UUID minionUUID) {
+        Inventory optionsGUI = Bukkit.createInventory(new MinionOptionsHolder(minionUUID), 27, "Minion Options");
+
+        // Add teleport option
+        ItemStack teleportItem = new ItemStack(Material.ENDER_PEARL);
+        ItemMeta teleportMeta = teleportItem.getItemMeta();
+        if (teleportMeta != null) {
+            teleportMeta.setDisplayName(ChatColor.AQUA + "Teleport to Minion");
+            teleportItem.setItemMeta(teleportMeta);
+        }
+        optionsGUI.setItem(11, teleportItem);
+
+        // Add remove option
+        ItemStack removeItem = new ItemStack(Material.BARRIER);
+        ItemMeta removeMeta = removeItem.getItemMeta();
+        if (removeMeta != null) {
+            removeMeta.setDisplayName(ChatColor.RED + "Remove Minion");
+            removeItem.setItemMeta(removeMeta);
+        }
+        optionsGUI.setItem(15, removeItem);
+
+        // Add back button
+        optionsGUI.setItem(22, Minion.createBackButton());
+
+        player.openInventory(optionsGUI);
+    }
+
+    private void openTeleportConfirmationGUI(Player player, UUID minionUUID) {
+        Inventory confirmationGUI = Bukkit.createInventory(new TeleportConfirmationHolder(minionUUID), 27, "Confirm Teleport to Minion");
+
+        // Add teleport confirmation item
+        ItemStack teleportItem = new ItemStack(Material.GREEN_WOOL);
+        ItemMeta teleportMeta = teleportItem.getItemMeta();
+        if (teleportMeta != null) {
+            teleportMeta.setDisplayName(ChatColor.GREEN + "Confirm Teleport");
+            teleportItem.setItemMeta(teleportMeta);
+        }
+        confirmationGUI.setItem(11, teleportItem);
+
+        // Add cancel button
+        ItemStack cancelItem = new ItemStack(Material.RED_WOOL);
+        ItemMeta cancelMeta = cancelItem.getItemMeta();
+        if (cancelMeta != null) {
+            cancelMeta.setDisplayName(ChatColor.RED + "Cancel");
+            cancelItem.setItemMeta(cancelMeta);
+        }
+        confirmationGUI.setItem(15, cancelItem);
+
+        player.openInventory(confirmationGUI);
+    }
+
+    public static class TeleportConfirmationHolder implements InventoryHolder {
+        private final UUID minionUUID;
+
+        public TeleportConfirmationHolder(UUID minionUUID) {
+            this.minionUUID = minionUUID;
+        }
+
+        public UUID getMinionUUID() {
+            return minionUUID;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return null;
+        }
+    }
+
+    public static class MinionOptionsHolder implements InventoryHolder {
+        private final UUID minionUUID;
+
+        public MinionOptionsHolder(UUID minionUUID) {
+            this.minionUUID = minionUUID;
+        }
+
+        public UUID getMinionUUID() {
+            return minionUUID;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return null;
+        }
+    }
 
     @EventHandler
     public void onTypeConfirmationClick(InventoryClickEvent event) {
@@ -629,20 +788,82 @@ public class InventoryClick implements Listener {
             MinionType newType = holder.getNewType();
             armorStand.getPersistentDataContainer().set(plugin.minionTypeKey, PersistentDataType.STRING, newType.name());
 
-            if (newType == MinionType.BLOCK_MINER) {
-                armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
-            } else { // FARMER
-                armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT.name());
-                armorStand.getPersistentDataContainer().set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HOEING.name());
-            }
-            player.sendMessage(ChatColor.GREEN + "Minion type switched to " + newType.name());
+            // If switching to FARMER, set default target to WHEAT_SEEDS
             if (newType == MinionType.FARMER) {
-                player.openInventory(getFarmerTargetSelectGUI(minionUUID));
-            } else {
-                player.openInventory(minion.getActionInventory());
+                armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT_SEEDS.name());
+                armorStand.getPersistentDataContainer().set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HOEING.name());
+            } else if (newType == MinionType.BLOCK_MINER) {
+                // If switching to MINER and no target set, set to COBBLESTONE
+                String currentTarget = armorStand.getPersistentDataContainer().getOrDefault(plugin.targetKey, PersistentDataType.STRING, "");
+                if (currentTarget.isEmpty() || !Material.getMaterial(currentTarget).isBlock()) {
+                    armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
+                }
             }
+
+            player.sendMessage(ChatColor.GREEN + "Minion type changed to " + newType.name());
+            player.openInventory(minion.getActionInventory());
         } else if (clickedItem.getType() == Material.RED_WOOL) {
             player.openInventory(minion.getActionInventory());
+        }
+    }
+
+    @EventHandler
+    public void onFarmerTargetSelect(InventoryClickEvent event) {
+        if (event.getInventory().getHolder() instanceof FarmerTargetSelectHolder holder) {
+            event.setCancelled(true);
+
+            Player player = (Player) event.getWhoClicked();
+            ItemStack clickedItem = event.getCurrentItem();
+
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+            // Special handling for barrier ("Back" button)
+            if (clickedItem.getType() == Material.BARRIER) {
+                UUID minionUUID = holder.getMinionUUID();
+                Entity entity = Bukkit.getServer().getEntity(minionUUID);
+                if (entity instanceof ArmorStand armorStand) {
+                    player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+                }
+                return;
+            }
+
+            // Check for disabled items
+            if (clickedItem.hasItemMeta() && clickedItem.getItemMeta().hasLore()) {
+                List<String> lore = clickedItem.getItemMeta().getLore();
+                for (String loreLine : lore) {
+                    if (loreLine.contains("unavailable")) {
+                        player.sendMessage(ChatColor.RED + "This crop is currently unavailable.");
+                        return;
+                    }
+                }
+            }
+
+            // Handle valid crop selections
+            Material cropMaterial = clickedItem.getType();
+            if (cropMaterial == Material.WHEAT || cropMaterial == Material.CARROT ||
+                cropMaterial == Material.POTATO || cropMaterial == Material.BEETROOT ||
+                cropMaterial == Material.NETHER_WART) {
+
+                UUID minionUUID = holder.getMinionUUID();
+                Entity entity = Bukkit.getServer().getEntity(minionUUID);
+                if (entity instanceof ArmorStand armorStand) {
+                    // For seed-based crops, store the seed material name
+                    if (cropMaterial == Material.WHEAT) {
+                        cropMaterial = Material.WHEAT_SEEDS;
+                    } else if (cropMaterial == Material.BEETROOT) {
+                        cropMaterial = Material.BEETROOT_SEEDS;
+                    }
+
+                    armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, cropMaterial.name());
+                    player.sendMessage(ChatColor.GREEN + "Farmer target set to " + cropMaterial.name());
+
+                    // Reset farmer state to HOEING when target changes
+                    armorStand.getPersistentDataContainer().set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HOEING.name());
+
+                    // Return to the minion action inventory
+                    player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+                }
+            }
         }
     }
 }

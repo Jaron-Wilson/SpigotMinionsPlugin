@@ -33,8 +33,6 @@ public class Minion {
     private final ArmorStand minionArmorStand;
     private BukkitTask miningTask;
 
-    private static final int SELECTOR_SLOT = 8;
-
     public Minion(MinionPlugin plugin, ArmorStand minionArmorStand) {
         this.plugin = plugin;
         this.minionArmorStand = minionArmorStand;
@@ -85,6 +83,12 @@ public class Minion {
         Material targetMaterial;
         try {
             targetMaterial = Material.valueOf(targetName);
+            // Convert seed materials to their crop display versions
+            if (targetMaterial == Material.BEETROOT_SEEDS) {
+                targetMaterial = Material.BEETROOT;
+            } else if (targetMaterial == Material.WHEAT_SEEDS) {
+                targetMaterial = Material.WHEAT;
+            }
         } catch (IllegalArgumentException e) {
             targetMaterial = Material.COBBLESTONE;
         }
@@ -92,9 +96,9 @@ public class Minion {
         ItemStack selector = createItem(targetMaterial, ChatColor.AQUA + "Target: " + targetName);
         ItemStack storage = createItem(Material.CHEST, ChatColor.BLUE + "Open Minion Storage");
 
-        inv.setItem(4, storage);
-        inv.setItem(SELECTOR_SLOT - 1, selector);
-        inv.setItem(SELECTOR_SLOT, createBackButton());
+        inv.setItem(3, storage);
+        inv.setItem(4, selector);
+        inv.setItem(8, createBackButton());
         return inv;
     }
 
@@ -361,9 +365,10 @@ public class Minion {
         // Seed collection toggle logic
         boolean wantsSeeds = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1) == 1;
         if (!wantsSeeds) {
-            if (targetCrop == Material.WHEAT || targetCrop == Material.BEETROOTS) {
-                drops.removeIf(item -> item.getType() == seedType);
-            }
+            // Filter out any seed items when seeds are not wanted
+            drops.removeIf(item -> item.getType() == seedType ||
+                           item.getType() == Material.WHEAT_SEEDS ||
+                           item.getType() == Material.BEETROOT_SEEDS);
         }
 
         // Add remaining drops to storage
@@ -493,6 +498,28 @@ public class Minion {
     // stop automation
     public void stopAutomation() {
         Bukkit.getScheduler().cancelTasks(plugin);
+    }
+
+    public MinionType getMinionType() {
+        String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+        return MinionType.valueOf(minionTypeStr);
+    }
+
+    public Location getLocation() {
+        return minionArmorStand.getLocation();
+    }
+
+    public Material getTargetMaterial() {
+        String targetName = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
+        try {
+            return Material.valueOf(targetName);
+        } catch (IllegalArgumentException e) {
+            return Material.COBBLESTONE;
+        }
+    }
+
+    public UUID getUUID() {
+        return minionArmorStand.getUniqueId();
     }
 
     public Inventory checkForChest(World world, Location loc) {
