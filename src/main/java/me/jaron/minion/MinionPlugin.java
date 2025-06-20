@@ -107,14 +107,14 @@ public class MinionPlugin extends JavaPlugin {
         Objects.requireNonNull(getCommand("minionautomation")).setExecutor(new MinionAutomationCommand(this));
         Objects.requireNonNull(getCommand("collectall")).setExecutor(new CollectAllCommand(this));
         Objects.requireNonNull(getCommand("getbundle")).setExecutor((sender, cmd, label, args) -> {
-            if (!(sender instanceof Player player)) {
-                sender.sendMessage(ChatColor.RED + "This command can only be used by players!");
+            if (sender instanceof Player player) {
+                bundleManager.createBundle(player);
+                player.sendMessage(ChatColor.GREEN + "You received a Minion Collection Bundle!");
                 return true;
             }
-            bundleManager.createBundle(player);
-            player.sendMessage(ChatColor.GREEN + "You received a Minion Collection Bundle!");
-            return true;
+            return false;
         });
+        Objects.requireNonNull(getCommand("deleteallminions")).setExecutor(new DeleteAllMinionsCommand(this));
     }
 
     public MinionBundleManager getBundleManager() {

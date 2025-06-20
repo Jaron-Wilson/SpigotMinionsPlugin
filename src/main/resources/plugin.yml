@@ -26,3 +26,6 @@ commands:
   getbundle:
     description: Get a Minion Collection Bundle for infinite storage
     usage: /<command>
+  deleteallminions:
+    description: Delete all your minions and transfer their storage to your bundle
+    usage: /<command>

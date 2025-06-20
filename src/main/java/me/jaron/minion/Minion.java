@@ -108,9 +108,17 @@ public class Minion {
 
     public Inventory getMinionStorage() {
         Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
-        storage.setItem(storage.getSize() - 1, createBackButton());
-        storage.setItem(storage.getSize() - 2, createCollectButton("Collect All"));
-        storage.setItem(storage.getSize() - 3, createCollectButton("Collect from Chest"));
+
+        // Calculate positions for control buttons - always place in bottom row
+        int size = storage.getSize();
+        int bottomRowStart = size - (size % 9);
+        if (bottomRowStart == size) bottomRowStart = size - 9; // Ensure we're using the bottom row
+
+        // Place the control buttons in the bottom row
+        storage.setItem(bottomRowStart + 8, createBackButton()); // Last slot in bottom row
+        storage.setItem(bottomRowStart + 7, createCollectButton("Collect All")); // Second last slot
+        storage.setItem(bottomRowStart + 6, createCollectButton("Collect from Chest")); // Third last slot
+
         return storage;
     }
 

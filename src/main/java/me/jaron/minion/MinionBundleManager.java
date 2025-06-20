@@ -274,6 +274,7 @@ public class MinionBundleManager {
     }
 
     private void setupNavigationButtons(Inventory inv, int currentPage, int totalPages, BundleView currentView) {
+        // Previous page button
         if (currentPage > 0) {
             ItemStack prevButton = new ItemStack(Material.ARROW);
             ItemMeta meta = prevButton.getItemMeta();
@@ -284,6 +285,7 @@ public class MinionBundleManager {
             inv.setItem(45, prevButton);
         }
 
+        // Next page button
         if (currentPage < totalPages - 1) {
             ItemStack nextButton = new ItemStack(Material.ARROW);
             ItemMeta meta = nextButton.getItemMeta();
@@ -292,6 +294,25 @@ public class MinionBundleManager {
                 nextButton.setItemMeta(meta);
             }
             inv.setItem(53, nextButton);
+        }
+
+        // Add Delete All Minions button when in Minions view
+        if (currentView == BundleView.MINIONS) {
+            ItemStack deleteAllButton = new ItemStack(Material.TNT);
+            ItemMeta deleteAllMeta = deleteAllButton.getItemMeta();
+            if (deleteAllMeta != null) {
+                deleteAllMeta.setDisplayName(ChatColor.RED + "Delete All Minions");
+                List<String> lore = new ArrayList<>();
+                lore.add(ChatColor.GRAY + "Delete all your minions");
+                lore.add(ChatColor.GRAY + "and transfer their items");
+                lore.add(ChatColor.GRAY + "to your bundle.");
+                lore.add("");
+                lore.add(ChatColor.RED + "Warning: This cannot be undone!");
+                deleteAllMeta.setLore(lore);
+                deleteAllButton.setItemMeta(deleteAllMeta);
+            }
+            // Changed from slot 49 to slot 51 to avoid conflict with Collect All button
+            inv.setItem(51, deleteAllButton);
         }
 
         if (currentView == BundleView.CATEGORIES) {
@@ -303,7 +324,7 @@ public class MinionBundleManager {
                 rawViewButton.setItemMeta(meta);
             }
             inv.setItem(48, rawViewButton);
-        } else { // RAW_ITEMS
+        } else { // RAW_ITEMS or MINIONS
             ItemStack catViewButton = new ItemStack(Material.CHEST);
             ItemMeta meta = catViewButton.getItemMeta();
             if (meta != null) {
@@ -336,6 +357,23 @@ public class MinionBundleManager {
             collectButton.setItemMeta(meta);
         }
         inv.setItem(49, collectButton);
+    }
+
+    private static ItemStack getItemStack() {
+        ItemStack deleteAllButton = new ItemStack(Material.TNT);
+        ItemMeta deleteAllMeta = deleteAllButton.getItemMeta();
+        if (deleteAllMeta != null) {
+            deleteAllMeta.setDisplayName(ChatColor.RED + "Delete All Minions");
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Delete all your minions");
+            lore.add(ChatColor.GRAY + "and transfer their items");
+            lore.add(ChatColor.GRAY + "to your bundle.");
+            lore.add("");
+            lore.add(ChatColor.RED + "Warning: This cannot be undone!");
+            deleteAllMeta.setLore(lore);
+            deleteAllButton.setItemMeta(deleteAllMeta);
+        }
+        return deleteAllButton;
     }
 
     public void addItemToBundle(Player player, ItemStack item) {
