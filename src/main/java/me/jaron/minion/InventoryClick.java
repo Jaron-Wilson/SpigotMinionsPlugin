@@ -64,6 +64,24 @@ public class InventoryClick implements Listener {
             player.closeInventory();
         } else if (event.getSlot() == 5) { // Remove Minion
             openRemovalConfirmationGUI(player, minionUUID);
+        } else if (event.getSlot() == 6) { // Upgrade Minion
+            // Handle upgrade button
+            int currentTier = armorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+            if (currentTier < 5) {
+                int targetTier = currentTier + 1;
+
+                // Check if upgrade path exists
+                Map<String, Integer> upgradeCosts = plugin.getUpgradeManager().getUpgradeCost(targetTier);
+                if (upgradeCosts.isEmpty()) {
+                    player.sendMessage(ChatColor.RED + "No upgrade path defined for tier " + targetTier);
+                    return;
+                }
+
+                // Show the upgrade confirmation GUI instead of auto-upgrading
+                openUpgradeConfirmationGUI(player, minionUUID, targetTier);
+            } else {
+                player.sendMessage(ChatColor.RED + "This minion is already at maximum tier!");
+            }
         } else if (event.getSlot() == 7) { // Target selection
             if (minionType == MinionType.FARMER) {
                 player.openInventory(getFarmerTargetSelectGUI(minionUUID));
@@ -291,6 +309,118 @@ public class InventoryClick implements Listener {
         player.openInventory(confirmationGUI);
     }
 
+    private void openUpgradeConfirmationGUI(Player player, UUID minionUUID, int targetTier) {
+        Entity entity = Bukkit.getServer().getEntity(minionUUID);
+        if (!(entity instanceof ArmorStand armorStand)) {
+            player.closeInventory();
+            return;
+        }
+
+        int currentTier = armorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        // Create a larger inventory to contain upgrade materials
+        Inventory confirmationGUI = Bukkit.createInventory(new UpgradeConfirmationHolder(minionUUID, targetTier), 36, "Upgrade Minion to Tier " + targetTier);
+
+        // Add display item with upgrade information
+        ItemStack displayItem = new ItemStack(Material.EXPERIENCE_BOTTLE);
+        ItemMeta displayMeta = displayItem.getItemMeta();
+        if (displayMeta != null) {
+            displayMeta.setDisplayName(ChatColor.AQUA + "Upgrade to Tier " + targetTier);
+
+            // Get the upgrade costs
+            Map<String, Integer> upgradeCosts = plugin.getUpgradeManager().getUpgradeCost(targetTier);
+
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.YELLOW + "Current Tier: " + ChatColor.WHITE + currentTier);
+            lore.add(ChatColor.YELLOW + "Target Tier: " + ChatColor.GREEN + targetTier);
+            lore.add("");
+            lore.add(ChatColor.GOLD + "Required Materials:");
+
+            // Add each required item to the lore
+            for (Map.Entry<String, Integer> entry : upgradeCosts.entrySet()) {
+                try {
+                    Material material = Material.valueOf(entry.getKey());
+                    int amount = entry.getValue();
+                    lore.add(ChatColor.WHITE + " - " + amount + "x " + formatMaterialName(material.name()));
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Invalid material in upgrade costs: " + entry.getKey());
+                }
+            }
+
+            lore.add("");
+            lore.add(ChatColor.YELLOW + "Place the required materials in the slots above");
+            lore.add(ChatColor.YELLOW + "and click 'Confirm Upgrade' when ready.");
+
+            displayMeta.setLore(lore);
+            displayItem.setItemMeta(displayMeta);
+        }
+        confirmationGUI.setItem(31, displayItem);
+
+        // Add material placeholders in the top rows
+        int slot = 10;
+        Map<String, Integer> upgradeCosts = plugin.getUpgradeManager().getUpgradeCost(targetTier);
+        for (Map.Entry<String, Integer> entry : upgradeCosts.entrySet()) {
+            try {
+                Material material = Material.valueOf(entry.getKey());
+                int amount = entry.getValue();
+
+                ItemStack placeholder = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
+                ItemMeta placeholderMeta = placeholder.getItemMeta();
+                if (placeholderMeta != null) {
+                    placeholderMeta.setDisplayName(ChatColor.YELLOW + "Place " + amount + "x " + formatMaterialName(material.name()) + " here");
+                    List<String> lore = new ArrayList<>();
+                    lore.add(ChatColor.GRAY + "Required for upgrade");
+                    placeholderMeta.setLore(lore);
+                    placeholder.setItemMeta(placeholderMeta);
+                }
+                confirmationGUI.setItem(slot, placeholder);
+                slot++;
+                if (slot == 17) break; // Maximum of 7 different materials
+            } catch (IllegalArgumentException e) {
+                plugin.getLogger().warning("Invalid material in upgrade costs: " + entry.getKey());
+            }
+        }
+
+        // Add the confirm upgrade button
+        ItemStack accept = new ItemStack(Material.GREEN_WOOL);
+        ItemMeta acceptMeta = accept.getItemMeta();
+        if (acceptMeta != null) {
+            acceptMeta.setDisplayName(ChatColor.GREEN + "Confirm Upgrade");
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Click to confirm after placing materials");
+            acceptMeta.setLore(lore);
+            accept.setItemMeta(acceptMeta);
+        }
+        confirmationGUI.setItem(30, accept);
+
+        // Add the cancel button
+        ItemStack deny = new ItemStack(Material.RED_WOOL);
+        ItemMeta denyMeta = deny.getItemMeta();
+        if (denyMeta != null) {
+            denyMeta.setDisplayName(ChatColor.RED + "Cancel");
+            deny.setItemMeta(denyMeta);
+        }
+        confirmationGUI.setItem(32, deny);
+
+        // Add decorative border with glass panes
+        ItemStack border = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
+        ItemMeta borderMeta = border.getItemMeta();
+        if (borderMeta != null) {
+            borderMeta.setDisplayName(" ");
+            border.setItemMeta(borderMeta);
+        }
+
+        for (int i = 0; i < 36; i++) {
+            if (confirmationGUI.getItem(i) == null) {
+                // Bottom row, sides, and material border
+                if (i < 9 || i > 26 || i % 9 == 0 || i % 9 == 8) {
+                    confirmationGUI.setItem(i, border);
+                }
+            }
+        }
+
+        player.openInventory(confirmationGUI);
+    }
+
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
@@ -417,15 +547,22 @@ public class InventoryClick implements Listener {
             } else if (displayName.equals(ChatColor.RED + "Back")) {
                 player.openInventory(minion.getActionInventory());
             } else if (displayName.equals(ChatColor.GREEN + "Upgrade Minion")) {
-                int tier = armorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
-                if (tier < 5) {
-                    tier++;
-                    armorStand.getPersistentDataContainer().set(plugin.tierKey, PersistentDataType.INTEGER, tier);
-                    player.sendMessage(ChatColor.GREEN + "Upgraded minion to tier " + tier);
+                int currentTier = armorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+                if (currentTier < 5) {
+                    int targetTier = currentTier + 1;
+
+                    // Check if upgrade path exists
+                    Map<String, Integer> upgradeCosts = plugin.getUpgradeManager().getUpgradeCost(targetTier);
+                    if (upgradeCosts.isEmpty()) {
+                        player.sendMessage(ChatColor.RED + "No upgrade path defined for tier " + targetTier);
+                        return;
+                    }
+
+                    // Show the upgrade confirmation GUI instead of auto-upgrading
+                    openUpgradeConfirmationGUI(player, minionUUID, targetTier);
                 } else {
-                    player.sendMessage(ChatColor.RED + "Max tier reached!");
+                    player.sendMessage(ChatColor.RED + "This minion is already at maximum tier!");
                 }
-                player.openInventory(minion.getActionInventory());
             } else if (displayName.equals(ChatColor.YELLOW + "Set Target") ||
                        displayName.startsWith(ChatColor.AQUA + "Target: ")) {
                 String minionTypeStr = armorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
@@ -765,6 +902,30 @@ public class InventoryClick implements Listener {
         }
     }
 
+    // New holder for upgrade confirmation GUI
+    public static class UpgradeConfirmationHolder implements InventoryHolder {
+        private final UUID minionUUID;
+        private final int targetTier;
+
+        public UpgradeConfirmationHolder(UUID minionUUID, int targetTier) {
+            this.minionUUID = minionUUID;
+            this.targetTier = targetTier;
+        }
+
+        public UUID getMinionUUID() {
+            return minionUUID;
+        }
+
+        public int getTargetTier() {
+            return targetTier;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return null;
+        }
+    }
+
     @EventHandler
     public void onTypeConfirmationClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
@@ -863,6 +1024,314 @@ public class InventoryClick implements Listener {
                     // Return to the minion action inventory
                     player.openInventory(new Minion(plugin, armorStand).getActionInventory());
                 }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onUpgradeConfirmationClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        // Check if this is our upgrade confirmation inventory
+        if (event.getInventory().getHolder() instanceof UpgradeConfirmationHolder holder) {
+            // Special case for UI elements that shouldn't be clicked
+            ItemStack clickedItem = event.getCurrentItem();
+
+            // Always allow clicks in player inventory (bottom inventory)
+            if (event.getClickedInventory() != event.getView().getTopInventory()) {
+                // This is a click in the player's inventory, allow it
+                return;
+            }
+
+            // Check if this is a shift-click in player inventory or a transfer between inventories
+            if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY ||
+                event.getAction() == InventoryAction.COLLECT_TO_CURSOR) {
+                // For shift-clicking from player inventory to upgrade inventory
+                if (clickedItem != null && !clickedItem.getType().isAir()) {
+                    // Only allow if destination is in slots 10-16
+                    for (int slot = 10; slot <= 16; slot++) {
+                        ItemStack slotItem = event.getInventory().getItem(slot);
+                        if (slotItem == null || slotItem.getType() == Material.AIR ||
+                            slotItem.getType() == Material.LIGHT_GRAY_STAINED_GLASS_PANE) {
+                            // There's an empty slot for this item
+                            return; // Allow the action
+                        }
+                    }
+                }
+            }
+
+            // Protect UI elements
+            if (clickedItem != null && (
+                clickedItem.getType() == Material.BLACK_STAINED_GLASS_PANE ||
+                clickedItem.getType() == Material.GREEN_WOOL ||
+                clickedItem.getType() == Material.RED_WOOL ||
+                clickedItem.getType() == Material.EXPERIENCE_BOTTLE
+            )) {
+                event.setCancelled(true); // Cancel clicks on UI elements
+
+                // Handle confirm/cancel button clicks
+                if (clickedItem.getType() == Material.GREEN_WOOL || clickedItem.getType() == Material.RED_WOOL) {
+                    UUID minionUUID = holder.getMinionUUID();
+                    Entity entity = Bukkit.getServer().getEntity(minionUUID);
+                    if (!(entity instanceof ArmorStand armorStand)) {
+                        player.closeInventory();
+                        return;
+                    }
+
+                    Minion minion = new Minion(plugin, armorStand);
+                    int targetTier = holder.getTargetTier();
+
+                    // Handle button clicks
+                    if (clickedItem.getType() == Material.GREEN_WOOL) {
+                        // Get the upgrade costs
+                        Map<String, Integer> upgradeCosts = plugin.getUpgradeManager().getUpgradeCost(targetTier);
+                        if (upgradeCosts.isEmpty()) {
+                            player.sendMessage(ChatColor.RED + "No upgrade path defined for tier " + targetTier);
+                            player.openInventory(minion.getActionInventory());
+                            return;
+                        }
+
+                        // Convert to Material map
+                        Map<Material, Integer> requiredMaterials = new HashMap<>();
+                        for (Map.Entry<String, Integer> entry : upgradeCosts.entrySet()) {
+                            try {
+                                Material material = Material.valueOf(entry.getKey());
+                                int amount = entry.getValue();
+                                requiredMaterials.put(material, amount);
+                            } catch (IllegalArgumentException e) {
+                                plugin.getLogger().warning("Invalid material in upgrade costs: " + entry.getKey());
+                            }
+                        }
+
+                        // Count all items in the upgrade slots (10-16)
+                        Map<Material, Integer> foundMaterials = new HashMap<>();
+                        List<ItemStack> allItems = new ArrayList<>();
+
+                        for (int slot = 10; slot <= 16; slot++) {
+                            ItemStack item = event.getInventory().getItem(slot);
+                            if (item != null && !item.getType().isAir() && item.getType() != Material.LIGHT_GRAY_STAINED_GLASS_PANE) {
+                                allItems.add(item.clone()); // Clone to avoid modifying the inventory directly
+                                Material material = item.getType();
+
+                                // Only count required materials towards the upgrade
+                                if (requiredMaterials.containsKey(material)) {
+                                    foundMaterials.put(material, foundMaterials.getOrDefault(material, 0) + item.getAmount());
+                                }
+                            }
+                        }
+
+                        // Check if all materials are present in sufficient quantities
+                        boolean allMaterialsPresent = true;
+                        StringBuilder missingItems = new StringBuilder();
+
+                        for (Map.Entry<Material, Integer> entry : requiredMaterials.entrySet()) {
+                            Material material = entry.getKey();
+                            int requiredAmount = entry.getValue();
+                            int foundAmount = foundMaterials.getOrDefault(material, 0);
+
+                            if (foundAmount < requiredAmount) {
+                                allMaterialsPresent = false;
+                                missingItems.append("\n").append(ChatColor.RED).append("- ")
+                                        .append(requiredAmount - foundAmount).append("x ")
+                                        .append(formatMaterialName(material.name()));
+                            }
+                        }
+
+                        if (!allMaterialsPresent) {
+                            player.sendMessage(ChatColor.RED + "You're missing these materials:" + missingItems);
+                            return;
+                        }
+
+                        // Process and return extra items
+                        List<ItemStack> itemsToReturn = new ArrayList<>();
+                        Map<Material, Integer> materialsToConsume = new HashMap<>(requiredMaterials);
+
+                        for (ItemStack item : allItems) {
+                            Material material = item.getType();
+
+                            // If this is a required material
+                            if (materialsToConsume.containsKey(material)) {
+                                int requiredAmount = materialsToConsume.get(material);
+
+                                if (requiredAmount > 0) {
+                                    // If we need more than the stack has
+                                    if (requiredAmount >= item.getAmount()) {
+                                        materialsToConsume.put(material, requiredAmount - item.getAmount());
+                                        // We consumed the entire stack, nothing to return
+                                    } else {
+                                        // We only need part of the stack
+                                        ItemStack extra = item.clone();
+                                        extra.setAmount(item.getAmount() - requiredAmount);
+                                        itemsToReturn.add(extra);
+                                        materialsToConsume.put(material, 0);
+                                    }
+                                } else {
+                                    // We already have enough of this material
+                                    itemsToReturn.add(item.clone());
+                                }
+                            } else {
+                                // This isn't a required material, return it
+                                itemsToReturn.add(item.clone());
+                            }
+                        }
+
+                        // Return any extra items to the player
+                        if (!itemsToReturn.isEmpty()) {
+                            for (ItemStack item : itemsToReturn) {
+                                HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(item);
+
+                                // If inventory is full, drop the items
+                                if (!remaining.isEmpty()) {
+                                    for (ItemStack remainingItem : remaining.values()) {
+                                        player.getWorld().dropItemNaturally(player.getLocation(), remainingItem);
+                                    }
+                                }
+                            }
+
+                            player.sendMessage(ChatColor.YELLOW + "Extra items have been returned to your inventory.");
+                        }
+
+                        // Apply the upgrade
+                        armorStand.getPersistentDataContainer().set(plugin.tierKey, PersistentDataType.INTEGER, targetTier);
+
+                        // Update the minion's name to reflect its tier
+                        String minionTypeStr = armorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+                        armorStand.setCustomName(ChatColor.GOLD + minionTypeStr + " " + ChatColor.WHITE + "[Tier " + targetTier + "]");
+
+                        // Send success message
+                        player.sendMessage(ChatColor.GREEN + "Successfully upgraded minion to tier " + targetTier + "!");
+
+                        // Update storage inventory size based on tier
+                        UUID minionUUID2 = armorStand.getUniqueId();
+                        int size = Math.min(targetTier * 9, 54); // Tier 1 = 9, Tier 2 = 18, etc. (max 54)
+
+                        // Get old storage inventory
+                        Inventory oldStorage = plugin.getMinionStorage(minionUUID2);
+
+                        // Create new inventory with larger size
+                        Inventory newStorage = Bukkit.createInventory(plugin.new StorageHolder(minionUUID2), size, ChatColor.AQUA + "Minion Storage");
+
+                        // Copy items from old inventory to new one
+                        if (oldStorage != null) {
+                            for (int i = 0; i < Math.min(oldStorage.getSize(), newStorage.getSize()); i++) {
+                                ItemStack item = oldStorage.getItem(i);
+                                if (item != null) {
+                                    newStorage.setItem(i, item);
+                                }
+                            }
+                        }
+
+                        // Add the UI elements to the new inventory
+                        plugin.setupMinionStorageUI(newStorage);
+
+                        // Update the storage in the map
+                        plugin.setMinionStorage(minionUUID2, newStorage);
+
+                        // If the minion was running automation, restart it to apply new delay
+                        if (plugin.isAutomationActive(player.getUniqueId())) {
+                            minion.stopAutomation();
+                            minion.startAutomation();
+                        }
+
+                        player.openInventory(minion.getActionInventory());
+                    } else if (clickedItem.getType() == Material.RED_WOOL) {
+                        // Return all items to the player before closing
+                        for (int slot = 10; slot <= 16; slot++) {
+                            ItemStack item = event.getInventory().getItem(slot);
+                            if (item != null && !item.getType().isAir() && item.getType() != Material.LIGHT_GRAY_STAINED_GLASS_PANE) {
+                                HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(item);
+
+                                // If inventory is full, drop the items
+                                if (!remaining.isEmpty()) {
+                                    for (ItemStack remainingItem : remaining.values()) {
+                                        player.getWorld().dropItemNaturally(player.getLocation(), remainingItem);
+                                    }
+                                }
+                            }
+                        }
+
+                        player.openInventory(minion.getActionInventory());
+                    }
+                }
+                return;
+            }
+
+            // If clicking in material slots (10-16)
+            if (event.getRawSlot() >= 10 && event.getRawSlot() <= 16) {
+                // If clicking on a placeholder, remove it
+                if (clickedItem != null && clickedItem.getType() == Material.LIGHT_GRAY_STAINED_GLASS_PANE) {
+                    event.setCurrentItem(null);
+                }
+
+                // Allow any interaction in the material slots
+                event.setCancelled(false);
+                return;
+            }
+
+            // For any other slots, cancel by default
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onBundleWithdrawalClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        // Handle bundle withdrawal confirmation clicks
+        if (event.getInventory().getHolder() instanceof MinionBundleManager.CategoryConfirmationHolder holder) {
+            event.setCancelled(true);
+
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+            // Handle confirm/cancel buttons
+            if (clickedItem.getType() == Material.GREEN_WOOL) {
+                // Process withdrawal
+                plugin.getBundleManager().withdrawFromBundle(player, holder.getMaterial());
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
+            } else if (clickedItem.getType() == Material.RED_WOOL) {
+                // Cancel and go back to categories view
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
+            }
+        }
+    }
+
+    /**
+     * Helper method to format material names for display
+     * Converts names like DIAMOND_SWORD to Diamond Sword
+     */
+    private String formatMaterialName(String materialName) {
+        String[] words = materialName.split("_");
+        StringBuilder result = new StringBuilder();
+
+        for (String word : words) {
+            if (word.length() > 0) {
+                result.append(word.substring(0, 1).toUpperCase())
+                      .append(word.substring(1).toLowerCase())
+                      .append(" ");
+            }
+        }
+
+        return result.toString().trim();
+    }
+
+    /**
+     * Helper method to remove items from player inventory
+     */
+    private void removeItems(Player player, Material material, int amount) {
+        int remaining = amount;
+
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && item.getType() == material) {
+                if (item.getAmount() <= remaining) {
+                    remaining -= item.getAmount();
+                    item.setAmount(0);
+                } else {
+                    item.setAmount(item.getAmount() - remaining);
+                    remaining = 0;
+                }
+
+                if (remaining <= 0) break;
             }
         }
     }

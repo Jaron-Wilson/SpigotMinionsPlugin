@@ -41,6 +41,7 @@ public class MinionPlugin extends JavaPlugin {
     public final NamespacedKey minionTypeKey = new NamespacedKey(this, "minion_type");
     public final NamespacedKey wantsSeedsKey = new NamespacedKey(this, "minion_wants_seeds");
     public final NamespacedKey farmerStateKey = new NamespacedKey(this, "farmer_state");
+    public final NamespacedKey lastActionTimeKey = new NamespacedKey(this, "last_action_time");
 
     private static MinionPlugin instance;
 
@@ -48,9 +49,15 @@ public class MinionPlugin extends JavaPlugin {
     private final Map<UUID, Inventory> minionInventories = new HashMap<>();
     private final Map<UUID, List<Minion>> minions = new HashMap<>();
     private MinionBundleManager bundleManager;
+    private MinionUpgradeManager upgradeManager;
 
     public Map<UUID, List<Minion>> getMinions() {
         return minions;
+    }
+
+    // Add getter for the upgrade manager
+    public MinionUpgradeManager getUpgradeManager() {
+        return upgradeManager;
     }
 
     public Inventory getMinionStorage(UUID uuid) {
@@ -65,6 +72,10 @@ public class MinionPlugin extends JavaPlugin {
         });
     }
 
+    public void setMinionStorage(UUID minionUUID, Inventory inventory) {
+        minionInventories.put(minionUUID, inventory);
+    }
+
     public class StorageHolder implements InventoryHolder {
         private final UUID uuid;
         public StorageHolder(UUID uuid) { this.uuid = uuid; }
@@ -77,6 +88,7 @@ public class MinionPlugin extends JavaPlugin {
     public void onEnable() {
         // Initialize bundle manager first
         bundleManager = new MinionBundleManager(this);
+        upgradeManager = new MinionUpgradeManager(this);
 
         // Load all saved data
         loadAllData();
@@ -309,7 +321,7 @@ public class MinionPlugin extends JavaPlugin {
         }
     }
 
-    private void setupMinionStorageUI(Inventory inv) {
+    public void setupMinionStorageUI(Inventory inv) {
         // Add collect from chest button
         ItemStack collectFromChest = new ItemStack(Material.HOPPER);
         ItemMeta collectChestMeta = collectFromChest.getItemMeta();

@@ -63,12 +63,13 @@ public class Minion {
 
         String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
         MinionType minionType = MinionType.valueOf(minionTypeStr);
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
 
         ItemStack typeItem;
         if (minionType == MinionType.BLOCK_MINER) {
-            typeItem = createItem(Material.DIAMOND_PICKAXE, ChatColor.GOLD + "Block Miner");
+            typeItem = createItem(Material.DIAMOND_PICKAXE, ChatColor.GOLD + "Block Miner " + ChatColor.WHITE + "[Tier " + tier + "]");
         } else {
-            typeItem = createItem(Material.DIAMOND_HOE, ChatColor.GOLD + "Farmer");
+            typeItem = createItem(Material.DIAMOND_HOE, ChatColor.GOLD + "Farmer " + ChatColor.WHITE + "[Tier " + tier + "]");
         }
 
         inv.setItem(0, typeItem);
@@ -95,9 +96,12 @@ public class Minion {
 
         ItemStack selector = createItem(targetMaterial, ChatColor.AQUA + "Target: " + targetName);
         ItemStack storage = createItem(Material.CHEST, ChatColor.BLUE + "Open Minion Storage");
+        ItemStack upgrade = createItem(Material.EXPERIENCE_BOTTLE, ChatColor.GREEN + "Upgrade Minion" +
+                                     (tier < 5 ? "" : ChatColor.RED + " (Max Tier)"));
 
         inv.setItem(3, storage);
         inv.setItem(4, selector);
+        inv.setItem(6, upgrade);
         inv.setItem(8, createBackButton());
         return inv;
     }
@@ -254,6 +258,10 @@ public class Minion {
 
         Block cropBlock = soilBlock.getRelative(0, 1, 0);
 
+        // Get tier and bonemeal chance from config
+        int tier = pdc.getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        double boneMealChance = plugin.getUpgradeManager().getBoneMealChance(tier);
+
         switch (currentState) {
             case HOEING:
                 if (targetCrop != Material.NETHER_WART) {
@@ -280,6 +288,21 @@ public class Minion {
                         harvestAndReplant(cropBlock, targetCrop);
                     } else {
                         minionArmorStand.setCustomName(ChatColor.YELLOW + "Waiting to grow");
+
+                        // Apply bonemeal chance based on tier
+                        if (boneMealChance > 0 && Math.random() < boneMealChance) {
+                            // Apply bonemeal effect (increase age)
+                            int currentAge = ageable.getAge();
+                            int maxAge = ageable.getMaximumAge();
+
+                            // Only apply if not max age
+                            if (currentAge < maxAge) {
+                                Ageable newAgeable = (Ageable) ageable.clone();
+                                newAgeable.setAge(Math.min(currentAge + 1, maxAge));
+                                cropBlock.setBlockData(newAgeable);
+                                minionArmorStand.setCustomName(ChatColor.GREEN + "Applied Bonemeal Effect");
+                            }
+                        }
                     }
                 }
                 // Planting logic
@@ -353,7 +376,27 @@ public class Minion {
         Inventory chestInv = checkForChest(world, minionArmorStand.getLocation());
         Material seedType = getSeedMaterial(targetCrop);
 
+        // Get tier for configuration-based features
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        double doubleCropsChance = plugin.getUpgradeManager().getDoubleCropsChance(tier);
+
         Collection<ItemStack> drops = new ArrayList<>(block.getDrops());
+
+        // Apply double crops chance based on tier
+        if (doubleCropsChance > 0 && Math.random() < doubleCropsChance) {
+            // Clone the drops to simulate getting double
+            Collection<ItemStack> extraDrops = new ArrayList<>();
+            for (ItemStack drop : drops) {
+                // Only duplicate non-seed items
+                if (drop.getType() != seedType) {
+                    ItemStack clone = drop.clone();
+                    extraDrops.add(clone);
+                    minionArmorStand.setCustomName(ChatColor.GREEN + "Double Harvest!");
+                }
+            }
+            drops.addAll(extraDrops);
+        }
+
         block.setType(Material.AIR);
 
         // Replant logic - seeds are infinite
@@ -473,10 +516,49 @@ public class Minion {
 
         minionArmorStand.setCustomName(ChatColor.GOLD + "Mining");
         minionArmorStand.swingMainHand();
-        block.getDrops().forEach(d -> addToStorage(d, storage, chestInv, world, block.getLocation()));
+
+        // Get tier for fortune ability
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        double fortuneChance = plugin.getUpgradeManager().getFortuneChance(tier);
+
+        // Get initial drops
+        Collection<ItemStack> drops = new ArrayList<>(block.getDrops());
+
+        // Apply fortune chance based on tier
+        if (fortuneChance > 0 && Math.random() < fortuneChance) {
+            // Add extra items (similar to Fortune enchantment)
+            Collection<ItemStack> extraDrops = new ArrayList<>();
+            for (ItemStack drop : drops) {
+                ItemStack extraDrop = drop.clone();
+                // Don't duplicate special rare items or blocks that should remain singular
+                if (!isSpecialRareDrop(extraDrop.getType())) {
+                    extraDrops.add(extraDrop);
+                    minionArmorStand.setCustomName(ChatColor.GREEN + "Fortune Effect!");
+                }
+            }
+            drops.addAll(extraDrops);
+        }
+
+        // Add all drops to storage
+        for (ItemStack drop : drops) {
+            addToStorage(drop, storage, chestInv, world, block.getLocation());
+        }
+
         block.setType(Material.AIR);
         return true;
 
+    }
+
+    private boolean isSpecialRareDrop(Material material) {
+        // Materials that shouldn't be duplicated by fortune
+        return material == Material.DIAMOND_BLOCK ||
+               material == Material.EMERALD_BLOCK ||
+               material == Material.NETHERITE_BLOCK ||
+               material == Material.BEACON ||
+               material == Material.DRAGON_EGG ||
+               material == Material.NETHER_STAR ||
+               material == Material.COMMAND_BLOCK ||
+               material == Material.SPAWNER;
     }
 
     /** Toggle between Mine (0) and Plant (1) modes */
@@ -491,9 +573,18 @@ public class Minion {
     // start scheduled automation running processCell(mode)
     public void startAutomation() {
         if (miningTask != null && !miningTask.isCancelled()) return;
+
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+        MinionType minionType = MinionType.valueOf(minionTypeStr);
+
+        // Get delay based on minion type and tier from config
+        int delay = plugin.getUpgradeManager().getDelay(minionType, tier);
+        int delayTicks = delay / 50; // Convert milliseconds to ticks (1 tick = ~50ms)
+
         miningTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             processCell(null);
-         }, 0L, 60L);
+         }, 0L, Math.max(delayTicks, 10L)); // Minimum 10 ticks (0.5 seconds)
     }
     // stop automation
     public void stopAutomation() {
