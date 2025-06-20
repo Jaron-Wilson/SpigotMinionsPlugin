@@ -22,7 +22,7 @@ public class BundleInteractListener implements Listener {
 
         if (plugin.getBundleManager().isBundle(item)) {
             event.setCancelled(true);
-            event.getPlayer().openInventory(plugin.getBundleManager().getBundleInventory(event.getPlayer()));
+            plugin.getBundleManager().openBundle(event.getPlayer());
         }
     }
 }

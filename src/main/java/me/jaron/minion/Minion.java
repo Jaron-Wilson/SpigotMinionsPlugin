@@ -16,8 +16,13 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.World;
 import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.block.data.Ageable;
+import me.jaron.minion.FarmerState;
 
+
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -27,8 +32,6 @@ public class Minion {
     private final MinionPlugin plugin;
     private final ArmorStand minionArmorStand;
     private BukkitTask miningTask;
-
-    private static final int SELECTOR_SLOT = 8;
 
     public Minion(MinionPlugin plugin, ArmorStand minionArmorStand) {
         this.plugin = plugin;
@@ -57,17 +60,49 @@ public class Minion {
 
     public Inventory getActionInventory() {
         Inventory inv = Bukkit.createInventory(new MinionInventoryHolder(minionArmorStand.getUniqueId()), 9, "Minion Control Panel");
-        ItemStack mineItem = createItem(Material.DIAMOND_PICKAXE, ChatColor.GOLD + "Mine Once");
-        ItemStack selector = createItem(Material.valueOf(minionArmorStand.getPersistentDataContainer()
-            .getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name())),
-            ChatColor.AQUA + "Target: " + minionArmorStand.getPersistentDataContainer()
-            .getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name()));
-        ItemStack storage = createItem(Material.CHEST, ChatColor.BLUE + "Open Minion Storage");
 
-        inv.setItem(0, mineItem);
-        inv.setItem(4, storage);
-        inv.setItem(SELECTOR_SLOT - 1, selector);
-        inv.setItem(SELECTOR_SLOT, createBackButton());
+        String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+        MinionType minionType = MinionType.valueOf(minionTypeStr);
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+
+        ItemStack typeItem;
+        if (minionType == MinionType.BLOCK_MINER) {
+            typeItem = createItem(Material.DIAMOND_PICKAXE, ChatColor.GOLD + "Block Miner " + ChatColor.WHITE + "[Tier " + tier + "]");
+        } else {
+            typeItem = createItem(Material.DIAMOND_HOE, ChatColor.GOLD + "Farmer " + ChatColor.WHITE + "[Tier " + tier + "]");
+        }
+
+        inv.setItem(0, typeItem);
+
+        if (minionType == MinionType.FARMER) {
+            boolean wantsSeeds = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1) == 1;
+            ItemStack seedsToggle = createItem(Material.WHEAT_SEEDS, ChatColor.GOLD + "Collect Seeds: " + (wantsSeeds ? "On" : "Off"));
+            inv.setItem(1, seedsToggle);
+        }
+
+        String targetName = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
+        Material targetMaterial;
+        try {
+            targetMaterial = Material.valueOf(targetName);
+            // Convert seed materials to their crop display versions
+            if (targetMaterial == Material.BEETROOT_SEEDS) {
+                targetMaterial = Material.BEETROOT;
+            } else if (targetMaterial == Material.WHEAT_SEEDS) {
+                targetMaterial = Material.WHEAT;
+            }
+        } catch (IllegalArgumentException e) {
+            targetMaterial = Material.COBBLESTONE;
+        }
+
+        ItemStack selector = createItem(targetMaterial, ChatColor.AQUA + "Target: " + targetName);
+        ItemStack storage = createItem(Material.CHEST, ChatColor.BLUE + "Open Minion Storage");
+        ItemStack upgrade = createItem(Material.EXPERIENCE_BOTTLE, ChatColor.GREEN + "Upgrade Minion" +
+                                     (tier < 5 ? "" : ChatColor.RED + " (Max Tier)"));
+
+        inv.setItem(3, storage);
+        inv.setItem(4, selector);
+        inv.setItem(6, upgrade);
+        inv.setItem(8, createBackButton());
         return inv;
     }
 
@@ -99,19 +134,53 @@ public class Minion {
     }
     private void processCell(Boolean forceMine) {
         if (minionArmorStand.isDead()) return;
+
+        var pdc = minionArmorStand.getPersistentDataContainer();
+        String minionTypeStr = pdc.getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+        MinionType minionType = MinionType.valueOf(minionTypeStr);
+
+        int idx = pdc.getOrDefault(plugin.indexKey, PersistentDataType.INTEGER, 0);
+
+        if (idx == 4) { // center spot
+            if (minionType == MinionType.FARMER) {
+                String targetStr = pdc.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT.name());
+                Material targetCrop = Material.valueOf(targetStr);
+                Block underMinion = minionArmorStand.getLocation().getBlock().getRelative(0, -1, 0);
+
+                if (targetCrop == Material.NETHER_WART) {
+                    if (underMinion.getType() != Material.LAVA) {
+                        underMinion.setType(Material.LAVA);
+                    }
+                } else {
+                    if (underMinion.getType() != Material.WATER) {
+                        underMinion.setType(Material.WATER);
+                    }
+                }
+            }
+            pdc.set(plugin.indexKey, PersistentDataType.INTEGER, (idx + 1) % 9);
+            return;
+        }
+
+        if (minionType == MinionType.FARMER) {
+            processFarmerCell(idx);
+        } else { // BLOCK_MINER
+            processBlockMinerCell(forceMine, idx);
+        }
+
+        pdc.set(plugin.indexKey, PersistentDataType.INTEGER, (idx + 1) % 9);
+        if (idx == 8 && minionType == MinionType.FARMER) {
+            checkFarmerStateTransition();
+        }
+    }
+
+    private void processBlockMinerCell(Boolean forceMine, int idx) {
         World world = minionArmorStand.getWorld();
         var persistentDataContainer = minionArmorStand.getPersistentDataContainer();
         String target = persistentDataContainer.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
         Material mat = Material.valueOf(target);
-        int idx = persistentDataContainer.getOrDefault(plugin.indexKey, PersistentDataType.INTEGER, 0);
         Location loc = minionArmorStand.getLocation();
         Block block = world.getBlockAt(loc.getBlockX() + (idx%3)-1,
             loc.getBlockY()-1, loc.getBlockZ() + (idx/3)-1);
-
-        if (idx == 4) {
-            persistentDataContainer.set(plugin.indexKey, PersistentDataType.INTEGER, (idx+1)%9);
-            return;
-        }
 
         Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
         if (storage == null) return;
@@ -159,7 +228,265 @@ public class Minion {
         }
 
         minionArmorStand.setCustomNameVisible(true);
-        persistentDataContainer.set(plugin.indexKey, PersistentDataType.INTEGER, (idx+1)%9);
+    }
+
+    private void processFarmerCell(int idx) {
+        World world = minionArmorStand.getWorld();
+        var pdc = minionArmorStand.getPersistentDataContainer();
+        String stateStr = pdc.getOrDefault(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HARVESTING.name());
+        FarmerState currentState;
+        try {
+            currentState = FarmerState.valueOf(stateStr);
+        } catch (IllegalArgumentException e) {
+            currentState = FarmerState.HARVESTING; // Default state
+        }
+
+        String targetStr = pdc.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT.name());
+        Material targetCrop;
+        try {
+            targetCrop = Material.valueOf(targetStr);
+        } catch (IllegalArgumentException e) {
+            minionArmorStand.setCustomName(ChatColor.RED + "Invalid Target!");
+            minionArmorStand.setCustomNameVisible(true);
+            return;
+        }
+
+        Location loc = minionArmorStand.getLocation();
+        Block soilBlock = world.getBlockAt(loc.getBlockX() + (idx % 3) - 1,
+                loc.getBlockY() - 1,
+                loc.getBlockZ() + (idx / 3) - 1);
+
+        Block cropBlock = soilBlock.getRelative(0, 1, 0);
+
+        // Get tier and bonemeal chance from config
+        int tier = pdc.getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        double boneMealChance = plugin.getUpgradeManager().getBoneMealChance(tier);
+
+        switch (currentState) {
+            case HOEING:
+                if (targetCrop != Material.NETHER_WART) {
+                    if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK) {
+                        soilBlock.setType(Material.FARMLAND);
+                        minionArmorStand.setCustomName(ChatColor.GREEN + "Hoeing...");
+                        minionArmorStand.swingMainHand();
+                    }
+                }
+                break;
+            case PLANTING:
+                if (cropBlock.getType() == Material.AIR && soilBlock.getType() == Material.FARMLAND) {
+                    if (canPlant(cropBlock, targetCrop)) {
+                        tryPlanting(cropBlock, targetCrop);
+                        minionArmorStand.setCustomName(ChatColor.GREEN + "Planting...");
+                    }
+                }
+                break;
+            case HARVESTING:
+                // Harvest logic
+                Material plantableCrop = getPlantableCrop(targetCrop);
+                if (cropBlock.getType() == plantableCrop && cropBlock.getBlockData() instanceof Ageable ageable) {
+                    if (ageable.getAge() == ageable.getMaximumAge()) {
+                        harvestAndReplant(cropBlock, targetCrop);
+                    } else {
+                        minionArmorStand.setCustomName(ChatColor.YELLOW + "Waiting to grow");
+
+                        // Apply bonemeal chance based on tier
+                        if (boneMealChance > 0 && Math.random() < boneMealChance) {
+                            // Apply bonemeal effect (increase age)
+                            int currentAge = ageable.getAge();
+                            int maxAge = ageable.getMaximumAge();
+
+                            // Only apply if not max age
+                            if (currentAge < maxAge) {
+                                Ageable newAgeable = (Ageable) ageable.clone();
+                                newAgeable.setAge(Math.min(currentAge + 1, maxAge));
+                                cropBlock.setBlockData(newAgeable);
+                                minionArmorStand.setCustomName(ChatColor.GREEN + "Applied Bonemeal Effect");
+                            }
+                        }
+                    }
+                }
+                // Planting logic
+                else if (cropBlock.getType() == Material.AIR) {
+                    // canPlant checks the soil, so we pass the cropBlock
+                    if (canPlant(cropBlock, targetCrop)) {
+                        tryPlanting(cropBlock, targetCrop);
+                    } else {
+                        minionArmorStand.setCustomName(ChatColor.RED + "Cannot plant here");
+                    }
+                } else if (cropBlock.getType() != Material.AIR) {
+                    minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + cropBlock.getType());
+                }
+                break;
+        }
+        minionArmorStand.setCustomNameVisible(true);
+    }
+
+    private void checkFarmerStateTransition() {
+        var pdc = minionArmorStand.getPersistentDataContainer();
+        String stateStr = pdc.getOrDefault(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HARVESTING.name());
+        FarmerState currentState = FarmerState.valueOf(stateStr);
+        World world = minionArmorStand.getWorld();
+        Location loc = minionArmorStand.getLocation();
+
+        if (currentState == FarmerState.HOEING) {
+            String targetCropStr = pdc.get(plugin.targetKey, PersistentDataType.STRING);
+            if (targetCropStr != null) {
+                Material targetCrop = Material.valueOf(targetCropStr);
+                if (targetCrop == Material.NETHER_WART) {
+                    pdc.set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.PLANTING.name());
+                    return;
+                }
+            }
+            boolean allHoed = true;
+            for (int i = 0; i < 9; i++) {
+                if (i == 4) continue;
+                Block currentSoil = world.getBlockAt(loc.getBlockX() + (i % 3) - 1, loc.getBlockY() - 1, loc.getBlockZ() + (i / 3) - 1);
+                if (currentSoil.getType() != Material.FARMLAND) {
+                    allHoed = false;
+                    break;
+                }
+            }
+            if (allHoed) {
+                pdc.set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.PLANTING.name());
+            }
+        } else if (currentState == FarmerState.PLANTING) {
+            boolean allPlanted = true;
+            for (int i = 0; i < 9; i++) {
+                if (i == 4) continue;
+                Block currentCropBlock = world.getBlockAt(loc.getBlockX() + (i % 3) - 1, loc.getBlockY(), loc.getBlockZ() + (i / 3) - 1);
+                Material targetCrop = Material.valueOf(pdc.get(plugin.targetKey, PersistentDataType.STRING));
+                Material plantableCrop = getPlantableCrop(targetCrop);
+                if (currentCropBlock.getType() != plantableCrop) {
+                    allPlanted = false;
+                    break;
+                }
+            }
+            if (allPlanted) {
+                pdc.set(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HARVESTING.name());
+            }
+        }
+    }
+
+    private void harvestAndReplant(Block block, Material targetCrop) {
+        minionArmorStand.setCustomName(ChatColor.GREEN + "Harvesting");
+        minionArmorStand.swingMainHand();
+
+        World world = block.getWorld();
+        Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
+        Inventory chestInv = checkForChest(world, minionArmorStand.getLocation());
+        Material seedType = getSeedMaterial(targetCrop);
+
+        // Get tier for configuration-based features
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        double doubleCropsChance = plugin.getUpgradeManager().getDoubleCropsChance(tier);
+
+        Collection<ItemStack> drops = new ArrayList<>(block.getDrops());
+
+        // Apply double crops chance based on tier
+        if (doubleCropsChance > 0 && Math.random() < doubleCropsChance) {
+            // Clone the drops to simulate getting double
+            Collection<ItemStack> extraDrops = new ArrayList<>();
+            for (ItemStack drop : drops) {
+                // Only duplicate non-seed items
+                if (drop.getType() != seedType) {
+                    ItemStack clone = drop.clone();
+                    extraDrops.add(clone);
+                    minionArmorStand.setCustomName(ChatColor.GREEN + "Double Harvest!");
+                }
+            }
+            drops.addAll(extraDrops);
+        }
+
+        block.setType(Material.AIR);
+
+        // Replant logic - seeds are infinite
+        Block soil = block.getRelative(0, -1, 0);
+        if (soil.getType() == Material.FARMLAND || (getPlantableCrop(targetCrop) == Material.NETHER_WART && soil.getType() == Material.SOUL_SAND)) {
+            block.setType(getPlantableCrop(targetCrop));
+        }
+
+        // Seed collection toggle logic
+        boolean wantsSeeds = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1) == 1;
+        if (!wantsSeeds) {
+            // Filter out any seed items when seeds are not wanted
+            drops.removeIf(item -> item.getType() == seedType ||
+                           item.getType() == Material.WHEAT_SEEDS ||
+                           item.getType() == Material.BEETROOT_SEEDS);
+        }
+
+        // Add remaining drops to storage
+        for (ItemStack drop : drops) {
+            if (drop.getAmount() > 0) {
+                addToStorage(drop, storage, chestInv, world, block.getLocation());
+            }
+        }
+    }
+
+    private void tryPlanting(Block block, Material targetCrop) {
+        if (canPlant(block, targetCrop)) {
+            Block soilBlock = block.getRelative(0, -1, 0);
+            if (targetCrop == Material.NETHER_WART) {
+                if (soilBlock.getType() != Material.SOUL_SAND) {
+                    soilBlock.setType(Material.SOUL_SAND);
+                }
+            } else {
+                if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK) {
+                    soilBlock.setType(Material.FARMLAND);
+                }
+            }
+
+            minionArmorStand.setCustomName(ChatColor.GREEN + "Planting");
+            block.setType(getPlantableCrop(targetCrop));
+        } else {
+            minionArmorStand.setCustomName(ChatColor.RED + "Cannot plant here");
+        }
+    }
+
+    private boolean canPlant(Block block, Material crop) {
+        Block soilBlock = block.getRelative(0, -1, 0);
+        Material soil = soilBlock.getType();
+        if (crop == Material.NETHER_WART) {
+            return soil == Material.SOUL_SAND || soil == Material.DIRT || soil == Material.GRASS_BLOCK;
+        } else { // Wheat, carrots, potatoes, beetroot
+            return soil == Material.FARMLAND || soil == Material.DIRT || soil == Material.GRASS_BLOCK;
+        }
+    }
+
+    private Material getPlantableCrop(Material targetCrop) {
+        return switch (targetCrop) {
+            case CARROT -> Material.CARROTS;
+            case POTATO -> Material.POTATOES;
+            case WHEAT_SEEDS -> Material.WHEAT;
+            case BEETROOT, BEETROOT_SEEDS -> Material.BEETROOTS;
+            default -> targetCrop;
+        };
+    }
+
+    private Material getSeedMaterial(Material crop) {
+        return switch (crop) {
+            case WHEAT -> Material.WHEAT_SEEDS;
+            case CARROTS, CARROT -> Material.CARROT;
+            case POTATOES, POTATO -> Material.POTATO;
+            case BEETROOTS, BEETROOT, BEETROOT_SEEDS -> Material.BEETROOT_SEEDS;
+            case NETHER_WART -> Material.NETHER_WART;
+            default -> crop;
+        };
+    }
+
+    private void addToStorage(ItemStack item, Inventory storage, Inventory chestInv, World world, Location dropLocation) {
+        Map<Integer, ItemStack> left;
+        if (chestInv != null) {
+            left = chestInv.addItem(item);
+            if (!left.isEmpty()) {
+                left = storage.addItem(left.values().toArray(new ItemStack[0]));
+            }
+        } else {
+            left = storage.addItem(item);
+        }
+
+        if (left != null && !left.isEmpty()) {
+            left.values().forEach(o -> world.dropItemNaturally(dropLocation, o));
+        }
     }
 
     private boolean plantBlock(Block block, Material mat) {
@@ -189,30 +516,49 @@ public class Minion {
 
         minionArmorStand.setCustomName(ChatColor.GOLD + "Mining");
         minionArmorStand.swingMainHand();
-        block.getDrops().forEach(d -> {
-            Map<Integer, ItemStack> left;
 
-            if (chestInv != null) {
-                // Always try to add to chest first. addItem will handle partial stacks.
-                left = chestInv.addItem(d);
+        // Get tier for fortune ability
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        double fortuneChance = plugin.getUpgradeManager().getFortuneChance(tier);
 
-                // If there are leftovers, try adding to minion storage.
-                if (!left.isEmpty()) {
-                    left = storage.addItem(left.values().toArray(new ItemStack[0]));
+        // Get initial drops
+        Collection<ItemStack> drops = new ArrayList<>(block.getDrops());
+
+        // Apply fortune chance based on tier
+        if (fortuneChance > 0 && Math.random() < fortuneChance) {
+            // Add extra items (similar to Fortune enchantment)
+            Collection<ItemStack> extraDrops = new ArrayList<>();
+            for (ItemStack drop : drops) {
+                ItemStack extraDrop = drop.clone();
+                // Don't duplicate special rare items or blocks that should remain singular
+                if (!isSpecialRareDrop(extraDrop.getType())) {
+                    extraDrops.add(extraDrop);
+                    minionArmorStand.setCustomName(ChatColor.GREEN + "Fortune Effect!");
                 }
-            } else {
-                // No chest, add directly to minion storage.
-                left = storage.addItem(d);
             }
+            drops.addAll(extraDrops);
+        }
 
-            // Drop any remaining items on the ground.
-            if (left != null && !left.isEmpty()) {
-                left.values().forEach(o -> world.dropItemNaturally(block.getLocation(), o));
-            }
-        });
+        // Add all drops to storage
+        for (ItemStack drop : drops) {
+            addToStorage(drop, storage, chestInv, world, block.getLocation());
+        }
+
         block.setType(Material.AIR);
         return true;
 
+    }
+
+    private boolean isSpecialRareDrop(Material material) {
+        // Materials that shouldn't be duplicated by fortune
+        return material == Material.DIAMOND_BLOCK ||
+               material == Material.EMERALD_BLOCK ||
+               material == Material.NETHERITE_BLOCK ||
+               material == Material.BEACON ||
+               material == Material.DRAGON_EGG ||
+               material == Material.NETHER_STAR ||
+               material == Material.COMMAND_BLOCK ||
+               material == Material.SPAWNER;
     }
 
     /** Toggle between Mine (0) and Plant (1) modes */
@@ -227,13 +573,44 @@ public class Minion {
     // start scheduled automation running processCell(mode)
     public void startAutomation() {
         if (miningTask != null && !miningTask.isCancelled()) return;
+
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+        MinionType minionType = MinionType.valueOf(minionTypeStr);
+
+        // Get delay based on minion type and tier from config
+        int delay = plugin.getUpgradeManager().getDelay(minionType, tier);
+        int delayTicks = delay / 50; // Convert milliseconds to ticks (1 tick = ~50ms)
+
         miningTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             processCell(null);
-         }, 0L, 60L);
+         }, 0L, Math.max(delayTicks, 10L)); // Minimum 10 ticks (0.5 seconds)
     }
     // stop automation
     public void stopAutomation() {
         Bukkit.getScheduler().cancelTasks(plugin);
+    }
+
+    public MinionType getMinionType() {
+        String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+        return MinionType.valueOf(minionTypeStr);
+    }
+
+    public Location getLocation() {
+        return minionArmorStand.getLocation();
+    }
+
+    public Material getTargetMaterial() {
+        String targetName = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
+        try {
+            return Material.valueOf(targetName);
+        } catch (IllegalArgumentException e) {
+            return Material.COBBLESTONE;
+        }
+    }
+
+    public UUID getUUID() {
+        return minionArmorStand.getUniqueId();
     }
 
     public Inventory checkForChest(World world, Location loc) {

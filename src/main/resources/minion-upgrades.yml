@@ -1,0 +1,88 @@
+# Minion Upgrades Configuration
+# This file contains all settings for minion upgrades and tier capabilities
+
+# Default settings for all minion types
+default:
+  tiers:
+    1:
+      delay: 5000  # Base delay in milliseconds between actions for tier 1 (5 seconds)
+      efficiency: 1.0  # Base efficiency multiplier (affects success rate)
+      range: 2  # Range of blocks the minion can reach
+    2:
+      delay: 4000  # 4 seconds
+      efficiency: 1.2
+      range: 3
+    3:
+      delay: 3000  # 3 seconds
+      efficiency: 1.5
+      range: 3
+    4:
+      delay: 2000  # 2 seconds
+      efficiency: 1.8
+      range: 4
+    5:
+      delay: 1000  # 1 second
+      efficiency: 2.0
+      range: 5
+
+# Specific settings for each minion type
+miner:
+  tiers:
+    1:
+      fortune_chance: 0.0  # Chance to get extra drops (0-1)
+    2:
+      fortune_chance: 0.1
+    3:
+      fortune_chance: 0.2
+    4:
+      fortune_chance: 0.3
+    5:
+      fortune_chance: 0.5
+
+farmer:
+  tiers:
+    1:
+      bonemeal_chance: 0.0  # Chance to apply bonemeal effect (0-1)
+      double_crops: 0.0  # Chance to get double harvest (0-1)
+    2:
+      bonemeal_chance: 0.1
+      double_crops: 0.05
+    3:
+      bonemeal_chance: 0.2
+      double_crops: 0.1
+    4:
+      bonemeal_chance: 0.3
+      double_crops: 0.2
+    5:
+      bonemeal_chance: 0.5
+      double_crops: 0.3
+
+lumberjack:
+  tiers:
+    1:
+      replant_saplings: false  # Whether minion replants saplings
+    2:
+      replant_saplings: true
+    3:
+      replant_saplings: true
+    4:
+      replant_saplings: true
+    5:
+      replant_saplings: true
+      # Additional settings can be added here
+
+# Upgrade costs (in terms of items required)
+upgrade_costs:
+  # Format: tier_to_upgrade_to: {material: amount, material: amount}
+  2:
+    IRON_INGOT: 32
+    REDSTONE: 16
+  3:
+    GOLD_INGOT: 32
+    LAPIS_LAZULI: 32
+  4:
+    DIAMOND: 16
+    EMERALD: 8
+  5:
+    NETHERITE_INGOT: 4
+    NETHER_STAR: 1

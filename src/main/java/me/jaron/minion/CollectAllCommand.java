@@ -27,15 +27,15 @@ public class CollectAllCommand implements CommandExecutor {
         }
 
         // First check if player has a bundle
-        ItemStack bundle = null;
+        boolean hasBundle = false;
         for (ItemStack invItem : player.getInventory().getContents()) {
             if (invItem != null && plugin.getBundleManager().isBundle(invItem)) {
-                bundle = invItem;
+                hasBundle = true;
                 break;
             }
         }
 
-        if (bundle == null) {
+        if (!hasBundle) {
             player.sendMessage(ChatColor.RED + "You need a Minion Collection Bundle! Use /getbundle to get one.");
             return true;
         }
@@ -43,6 +43,22 @@ public class CollectAllCommand implements CommandExecutor {
         // Close the player's inventory to prevent title update errors
         player.closeInventory();
 
+        int itemsCollected = collectAllForPlayer(player);
+
+        if (itemsCollected > 0) {
+            player.sendMessage(ChatColor.GREEN + "Collected " + itemsCollected + " items from all your minions!");
+            // Reopen the bundle inventory after collecting
+            Bukkit.getScheduler().runTask(plugin, () ->
+                    plugin.getBundleManager().refreshInventory(player)
+            );
+        } else {
+            player.sendMessage(ChatColor.YELLOW + "No items to collect!");
+        }
+
+        return true;
+    }
+
+    public int collectAllForPlayer(Player player) {
         int itemsCollected = 0;
         for (Entity entity : player.getWorld().getEntities()) {
             if (!(entity instanceof ArmorStand armorStand)) continue;
@@ -50,7 +66,7 @@ public class CollectAllCommand implements CommandExecutor {
             // Check if it's a minion and belongs to the player
             if (!armorStand.getPersistentDataContainer().has(plugin.isMinionKey, PersistentDataType.BYTE)) continue;
             String ownerUUID = armorStand.getPersistentDataContainer().get(plugin.ownerKey, PersistentDataType.STRING);
-            if (!player.getUniqueId().toString().equals(ownerUUID)) continue;
+            if (ownerUUID == null || !player.getUniqueId().toString().equals(ownerUUID)) continue;
 
             // Get minion storage and connected chest
             Minion minion = new Minion(plugin, armorStand);
@@ -67,18 +83,7 @@ public class CollectAllCommand implements CommandExecutor {
                 itemsCollected += collectFromInventory(player, chestInv);
             }
         }
-
-        if (itemsCollected > 0) {
-            player.sendMessage(ChatColor.GREEN + "Collected " + itemsCollected + " items from all your minions!");
-            // Reopen the bundle inventory after collecting
-            Bukkit.getScheduler().runTask(plugin, () ->
-                player.openInventory(plugin.getBundleManager().getBundleInventory(player))
-            );
-        } else {
-            player.sendMessage(ChatColor.YELLOW + "No items to collect!");
-        }
-
-        return true;
+        return itemsCollected;
     }
 
     public int collectFromInventory(Player player, Inventory sourceInv) {
