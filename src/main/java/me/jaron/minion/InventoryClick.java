@@ -1215,16 +1215,19 @@ public class InventoryClick implements Listener {
                         if (oldStorage != null) {
                             for (int i = 0; i < Math.min(oldStorage.getSize(), newStorage.getSize()); i++) {
                                 ItemStack item = oldStorage.getItem(i);
-                                if (item != null) {
+                                // Skip copying the control buttons from old storage
+                                if (item != null &&
+                                    !(item.getType() == Material.BARRIER ||
+                                      (item.getType() == Material.HOPPER &&
+                                       item.hasItemMeta() &&
+                                       (item.getItemMeta().getDisplayName().contains("Collect All") ||
+                                        item.getItemMeta().getDisplayName().contains("Collect from Chest"))))) {
                                     newStorage.setItem(i, item);
                                 }
                             }
                         }
 
-                        // Add the UI elements to the new inventory
-                        plugin.setupMinionStorageUI(newStorage);
-
-                        // Update the storage in the map
+                        // Set the new storage inventory
                         plugin.setMinionStorage(minionUUID2, newStorage);
 
                         // If the minion was running automation, restart it to apply new delay
