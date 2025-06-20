@@ -675,6 +675,46 @@ public class InventoryClick implements Listener {
                     } else {
                         player.sendMessage(ChatColor.YELLOW + "No items to collect!");
                     }
+                } else if (displayName.equals(ChatColor.RED + "Delete All Minions")) {
+                    // Open confirmation dialog for deleting all minions
+                    Inventory confirmationGUI = Bukkit.createInventory(
+                        new DeleteAllMinionsConfirmationHolder(player.getUniqueId()),
+                        27, "Confirm Delete ALL Minions");
+
+                    // Add warning message
+                    ItemStack warningItem = new ItemStack(Material.BARRIER);
+                    ItemMeta warningMeta = warningItem.getItemMeta();
+                    if (warningMeta != null) {
+                        warningMeta.setDisplayName(ChatColor.RED + "WARNING!");
+                        List<String> lore = new ArrayList<>();
+                        lore.add(ChatColor.GRAY + "This will delete ALL of your minions");
+                        lore.add(ChatColor.GRAY + "and transfer their items to your bundle.");
+                        lore.add("");
+                        lore.add(ChatColor.RED + "This action cannot be undone!");
+                        warningMeta.setLore(lore);
+                        warningItem.setItemMeta(warningMeta);
+                    }
+                    confirmationGUI.setItem(13, warningItem);
+
+                    // Add confirm button
+                    ItemStack confirmButton = new ItemStack(Material.GREEN_WOOL);
+                    ItemMeta confirmMeta = confirmButton.getItemMeta();
+                    if (confirmMeta != null) {
+                        confirmMeta.setDisplayName(ChatColor.GREEN + "Confirm Delete All");
+                        confirmButton.setItemMeta(confirmMeta);
+                    }
+                    confirmationGUI.setItem(11, confirmButton);
+
+                    // Add cancel button
+                    ItemStack cancelButton = new ItemStack(Material.RED_WOOL);
+                    ItemMeta cancelMeta = cancelButton.getItemMeta();
+                    if (cancelMeta != null) {
+                        cancelMeta.setDisplayName(ChatColor.RED + "Cancel");
+                        cancelButton.setItemMeta(cancelMeta);
+                    }
+                    confirmationGUI.setItem(15, cancelButton);
+
+                    player.openInventory(confirmationGUI);
                 } else {
                     int clickedSlot = event.getSlot();
                     int page = plugin.getBundleManager().getMinionsCurrentPage(player.getUniqueId());
@@ -918,6 +958,24 @@ public class InventoryClick implements Listener {
 
         public int getTargetTier() {
             return targetTier;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return null;
+        }
+    }
+
+    // New holder for Delete All Minions confirmation GUI
+    public static class DeleteAllMinionsConfirmationHolder implements InventoryHolder {
+        private final UUID playerUUID;
+
+        public DeleteAllMinionsConfirmationHolder(UUID playerUUID) {
+            this.playerUUID = playerUUID;
+        }
+
+        public UUID getPlayerUUID() {
+            return playerUUID;
         }
 
         @Override
@@ -1336,6 +1394,34 @@ public class InventoryClick implements Listener {
 
                 if (remaining <= 0) break;
             }
+        }
+    }
+
+    @EventHandler
+    public void onDeleteAllMinionsClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (event.getClickedInventory() == null || !(event.getClickedInventory().getHolder() instanceof DeleteAllMinionsConfirmationHolder holder)) return;
+
+        event.setCancelled(true);
+
+        ItemStack clickedItem = event.getCurrentItem();
+        if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+        if (clickedItem.getType() == Material.GREEN_WOOL) {
+            // Execute the delete all minions command
+            DeleteAllMinionsCommand deleteCommand = new DeleteAllMinionsCommand(plugin);
+            boolean success = deleteCommand.deleteAllMinions(player);
+
+            if (success) {
+                // Return to bundle view
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
+            } else {
+                // Close inventory if there was an issue
+                player.closeInventory();
+            }
+        } else if (clickedItem.getType() == Material.RED_WOOL) {
+            // Cancel and return to minions view
+            player.openInventory(plugin.getBundleManager().getMinionsInventory(player));
         }
     }
 }
