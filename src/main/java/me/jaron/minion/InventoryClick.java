@@ -437,42 +437,47 @@ public class InventoryClick implements Listener {
 
             // Handle back button click
             ItemStack clickedItem = event.getCurrentItem();
-            if (clickedItem != null && clickedItem.getType() == Material.BARRIER) {
-                ItemMeta meta = clickedItem.getItemMeta();
-                if (meta != null && meta.getDisplayName().equals(ChatColor.RED + "Back")) {
-                    // If we're in the main menu, close the inventory
-                    if (event.getView().getTitle().equals("Minion Control Panel")) {
-                        player.closeInventory();
-                        return;
-                    }
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
-                    // For other inventories, return to main menu
-                    if (event.getInventory().getHolder() instanceof Minion.MinionInventoryHolder holder) {
-                        UUID minionUUID = holder.getMinionUUID();
-                        Entity entity = Bukkit.getServer().getEntity(minionUUID);
-                        if (entity instanceof ArmorStand armorStand) {
-                            player.openInventory(new Minion(plugin, armorStand).getActionInventory());
-                        }
-                    } else if (event.getInventory().getHolder() instanceof TargetSelectHolder holder) {
-                        Entity entity = Bukkit.getServer().getEntity(holder.getMinionUUID());
-                        if (entity instanceof ArmorStand armorStand) {
-                            player.openInventory(new Minion(plugin, armorStand).getActionInventory());
-                        }
-                    } else if (event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder storageHolder) {
-                        Entity entity = Bukkit.getServer().getEntity(storageHolder.getMinionUUID());
-                        if (entity instanceof ArmorStand armorStand) {
-                            player.openInventory(new Minion(plugin, armorStand).getActionInventory());
-                        }
-                    }
+            // Only process clicks for items with ItemMeta and display names to fix the bug with wool/target items
+            if (!clickedItem.hasItemMeta() || !clickedItem.getItemMeta().hasDisplayName()) return;
+
+            String displayName = clickedItem.getItemMeta().getDisplayName();
+
+            // Handle back button
+            if (clickedItem.getType() == Material.BARRIER && displayName.equals(ChatColor.RED + "Back")) {
+                // If we're in the main menu, close the inventory
+                if (event.getView().getTitle().equals("Minion Control Panel")) {
+                    player.closeInventory();
                     return;
                 }
+
+                // For other inventories, return to main menu
+                if (event.getInventory().getHolder() instanceof Minion.MinionInventoryHolder holder) {
+                    UUID minionUUID = holder.getMinionUUID();
+                    Entity entity = Bukkit.getServer().getEntity(minionUUID);
+                    if (entity instanceof ArmorStand armorStand) {
+                        player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+                    }
+                } else if (event.getInventory().getHolder() instanceof TargetSelectHolder holder) {
+                    Entity entity = Bukkit.getServer().getEntity(holder.getMinionUUID());
+                    if (entity instanceof ArmorStand armorStand) {
+                        player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+                    }
+                } else if (event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder storageHolder) {
+                    Entity entity = Bukkit.getServer().getEntity(storageHolder.getMinionUUID());
+                    if (entity instanceof ArmorStand armorStand) {
+                        player.openInventory(new Minion(plugin, armorStand).getActionInventory());
+                    }
+                }
+                return;
             }
 
             // Handle collect buttons
-            if (clickedItem != null && clickedItem.getType() == Material.HOPPER) {
+            if (clickedItem.getType() == Material.HOPPER) {
                 ItemMeta meta = clickedItem.getItemMeta();
                 if (meta != null) {
-                    String displayName = meta.getDisplayName();
+                    displayName = meta.getDisplayName();
                     if (displayName.equals(ChatColor.GREEN + "Collect All")) {
                         if (event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder storageHolder) {
                             Entity entity = Bukkit.getServer().getEntity(storageHolder.getMinionUUID());
@@ -648,7 +653,13 @@ public class InventoryClick implements Listener {
                 }
             }
             if (totalAmount > 0) {
-                player.openInventory(plugin.getBundleManager().getCategoryConfirmationGUI(player, material, totalAmount));
+                if (event.isRightClick()) {
+                    // Right-click opens delete options
+                    player.openInventory(plugin.getBundleManager().getPartialDeletionGUI(player, material, totalAmount));
+                } else {
+                    // Left-click opens withdrawal confirmation (original behavior)
+                    player.openInventory(plugin.getBundleManager().getCategoryConfirmationGUI(player, material, totalAmount));
+                }
             }
             return;
         }
@@ -1352,6 +1363,47 @@ public class InventoryClick implements Listener {
                 player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
             } else if (clickedItem.getType() == Material.RED_WOOL) {
                 // Cancel and go back to categories view
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
+            }
+        }
+    }
+
+    @EventHandler
+    public void onPartialDeletionClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        // Handle partial deletion GUI clicks
+        if (event.getInventory().getHolder() instanceof MinionBundleManager.PartialDeletionHolder holder) {
+            event.setCancelled(true);
+
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
+            Material material = holder.getMaterial();
+            int totalAmount = holder.getTotalAmount();
+
+            // Handle different deletion options
+            if (clickedItem.getType() == Material.TNT) {
+                // Delete ALL items
+                plugin.getBundleManager().deleteFromBundle(player, material, totalAmount);
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
+            } else if (clickedItem.getType() == Material.RED_CONCRETE) {
+                // Delete 1/2 of items
+                int amountToDelete = totalAmount / 2;
+                plugin.getBundleManager().deleteFromBundle(player, material, amountToDelete);
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
+            } else if (clickedItem.getType() == Material.ORANGE_CONCRETE) {
+                // Delete 1/4 of items
+                int amountToDelete = totalAmount / 4;
+                plugin.getBundleManager().deleteFromBundle(player, material, amountToDelete);
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
+            } else if (clickedItem.getType() == Material.YELLOW_CONCRETE) {
+                // Delete 1/8 of items
+                int amountToDelete = totalAmount / 8;
+                plugin.getBundleManager().deleteFromBundle(player, material, amountToDelete);
+                player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
+            } else if (clickedItem.getType() == Material.BARRIER) {
+                // Cancel deletion and return to categories view
                 player.openInventory(plugin.getBundleManager().getCategoriesInventory(player));
             }
         }
