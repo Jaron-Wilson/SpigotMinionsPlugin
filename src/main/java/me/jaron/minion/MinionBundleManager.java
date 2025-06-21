@@ -8,6 +8,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -115,7 +116,8 @@ public class MinionBundleManager {
                 meta.setLore(Arrays.asList(
                         ChatColor.GRAY + "Total: " + ChatColor.YELLOW + entry.getValue(),
                         "",
-                        ChatColor.GREEN + "Click to withdraw."
+                        ChatColor.GREEN + "Left-Click: " + ChatColor.GRAY + "Withdraw items",
+                        ChatColor.RED + "Right-Click: " + ChatColor.GRAY + "Delete items"
                 ));
                 meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
                 meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -211,6 +213,81 @@ public class MinionBundleManager {
         return inv;
     }
 
+    /**
+     * Opens a GUI with options to delete all or a fraction of items in a category
+     */
+    public Inventory getPartialDeletionGUI(Player player, Material material, int totalAmount) {
+        Inventory inv = Bukkit.createInventory(new PartialDeletionHolder(player.getUniqueId(), material, totalAmount), 36,
+                ChatColor.RED + "Delete Items: " + ChatColor.AQUA + formatMaterialName(material));
+
+        // Display info about the category
+        ItemStack infoItem = new ItemStack(material);
+        ItemMeta infoMeta = infoItem.getItemMeta();
+        if (infoMeta != null) {
+            infoMeta.setDisplayName(ChatColor.GOLD + formatMaterialName(material));
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "You have " + ChatColor.YELLOW + totalAmount + ChatColor.GRAY + " items");
+            lore.add(ChatColor.GRAY + "Choose how many to delete:");
+            infoMeta.setLore(lore);
+            infoItem.setItemMeta(infoMeta);
+        }
+        inv.setItem(4, infoItem);
+
+        // Delete all option
+        ItemStack deleteAll = new ItemStack(Material.TNT);
+        ItemMeta deleteAllMeta = deleteAll.getItemMeta();
+        if (deleteAllMeta != null) {
+            deleteAllMeta.setDisplayName(ChatColor.RED + "Delete ALL Items");
+            deleteAllMeta.setLore(Collections.singletonList(ChatColor.GRAY + "Delete all " + totalAmount + " items"));
+            deleteAll.setItemMeta(deleteAllMeta);
+        }
+        inv.setItem(19, deleteAll);
+
+        // Delete 1/2 option
+        ItemStack deleteHalf = new ItemStack(Material.RED_CONCRETE);
+        ItemMeta deleteHalfMeta = deleteHalf.getItemMeta();
+        if (deleteHalfMeta != null) {
+            int amount = totalAmount / 2;
+            deleteHalfMeta.setDisplayName(ChatColor.RED + "Delete 1/2");
+            deleteHalfMeta.setLore(Collections.singletonList(ChatColor.GRAY + "Delete " + amount + " items"));
+            deleteHalf.setItemMeta(deleteHalfMeta);
+        }
+        inv.setItem(21, deleteHalf);
+
+        // Delete 1/4 option
+        ItemStack deleteQuarter = new ItemStack(Material.ORANGE_CONCRETE);
+        ItemMeta deleteQuarterMeta = deleteQuarter.getItemMeta();
+        if (deleteQuarterMeta != null) {
+            int amount = totalAmount / 4;
+            deleteQuarterMeta.setDisplayName(ChatColor.GOLD + "Delete 1/4");
+            deleteQuarterMeta.setLore(Collections.singletonList(ChatColor.GRAY + "Delete " + amount + " items"));
+            deleteQuarter.setItemMeta(deleteQuarterMeta);
+        }
+        inv.setItem(23, deleteQuarter);
+
+        // Delete 1/8 option
+        ItemStack deleteEighth = new ItemStack(Material.YELLOW_CONCRETE);
+        ItemMeta deleteEighthMeta = deleteEighth.getItemMeta();
+        if (deleteEighthMeta != null) {
+            int amount = totalAmount / 8;
+            deleteEighthMeta.setDisplayName(ChatColor.YELLOW + "Delete 1/8");
+            deleteEighthMeta.setLore(Collections.singletonList(ChatColor.GRAY + "Delete " + amount + " items"));
+            deleteEighth.setItemMeta(deleteEighthMeta);
+        }
+        inv.setItem(25, deleteEighth);
+
+        // Cancel button
+        ItemStack cancel = new ItemStack(Material.BARRIER);
+        ItemMeta cancelMeta = cancel.getItemMeta();
+        if (cancelMeta != null) {
+            cancelMeta.setDisplayName(ChatColor.GREEN + "Cancel");
+            cancel.setItemMeta(cancelMeta);
+        }
+        inv.setItem(31, cancel);
+
+        return inv;
+    }
+
     public void withdrawFromBundle(Player player, Material material) {
         List<ItemStack> items = bundleContents.get(player.getUniqueId());
         if (items == null) return;
@@ -298,19 +375,7 @@ public class MinionBundleManager {
 
         // Add Delete All Minions button when in Minions view
         if (currentView == BundleView.MINIONS) {
-            ItemStack deleteAllButton = new ItemStack(Material.TNT);
-            ItemMeta deleteAllMeta = deleteAllButton.getItemMeta();
-            if (deleteAllMeta != null) {
-                deleteAllMeta.setDisplayName(ChatColor.RED + "Delete All Minions");
-                List<String> lore = new ArrayList<>();
-                lore.add(ChatColor.GRAY + "Delete all your minions");
-                lore.add(ChatColor.GRAY + "and transfer their items");
-                lore.add(ChatColor.GRAY + "to your bundle.");
-                lore.add("");
-                lore.add(ChatColor.RED + "Warning: This cannot be undone!");
-                deleteAllMeta.setLore(lore);
-                deleteAllButton.setItemMeta(deleteAllMeta);
-            }
+            ItemStack deleteAllButton = getStack();
             // Changed from slot 49 to slot 51 to avoid conflict with Collect All button
             inv.setItem(51, deleteAllButton);
         }
@@ -320,7 +385,11 @@ public class MinionBundleManager {
             ItemMeta meta = rawViewButton.getItemMeta();
             if (meta != null) {
                 meta.setDisplayName(ChatColor.AQUA + "View Raw Items");
-                meta.setLore(Collections.singletonList(ChatColor.GRAY + "View all items individually."));
+                meta.setLore(
+                        Arrays.asList(
+                                ChatColor.GRAY + "View all items individually.",
+                                ChatColor.AQUA + "Just for show :)"
+                        ));
                 rawViewButton.setItemMeta(meta);
             }
             inv.setItem(48, rawViewButton);
@@ -357,6 +426,23 @@ public class MinionBundleManager {
             collectButton.setItemMeta(meta);
         }
         inv.setItem(49, collectButton);
+    }
+
+    private static ItemStack getStack() {
+        ItemStack deleteAllButton = getItemStack();
+        ItemMeta deleteAllMeta = deleteAllButton.getItemMeta();
+        if (deleteAllMeta != null) {
+            deleteAllMeta.setDisplayName(ChatColor.RED + "Delete All Minions");
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Delete all your minions");
+            lore.add(ChatColor.GRAY + "and transfer their items");
+            lore.add(ChatColor.GRAY + "to your bundle.");
+            lore.add("");
+            lore.add(ChatColor.RED + "Warning: This cannot be undone!");
+            deleteAllMeta.setLore(lore);
+            deleteAllButton.setItemMeta(deleteAllMeta);
+        }
+        return deleteAllButton;
     }
 
     private static ItemStack getItemStack() {
@@ -534,5 +620,68 @@ public class MinionBundleManager {
         public Material getMaterial() { return material; }
         public int getAmount() { return amount; }
         @Override public Inventory getInventory() { return Bukkit.createInventory(this, 0); }
+    }
+
+    // Inner class for partial deletion confirmation GUI
+    public class PartialDeletionHolder implements InventoryHolder {
+        private final UUID playerUUID;
+        private final Material material;
+        private final int totalAmount;
+
+        public PartialDeletionHolder(UUID playerUUID, Material material, int totalAmount) {
+            this.playerUUID = playerUUID;
+            this.material = material;
+            this.totalAmount = totalAmount;
+        }
+
+        public UUID getPlayerUUID() {
+            return playerUUID;
+        }
+
+        public Material getMaterial() {
+            return material;
+        }
+
+        public int getTotalAmount() {
+            return totalAmount;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return null;
+        }
+    }
+
+    /**
+     * Deletes a specific amount of items of a given material from the bundle
+     *
+     * @param player The player whose bundle to modify
+     * @param material The material type to delete
+     * @param amountToDelete The amount of items to delete
+     */
+    public void deleteFromBundle(Player player, Material material, int amountToDelete) {
+        List<ItemStack> items = bundleContents.get(player.getUniqueId());
+        if (items == null || items.isEmpty()) return;
+
+        int amountDeleted = 0;
+        ListIterator<ItemStack> iterator = items.listIterator(items.size());
+        while (iterator.hasPrevious() && amountDeleted < amountToDelete) {
+            ItemStack current = iterator.previous();
+            if (current.getType() == material) {
+                int toRemove = Math.min(amountToDelete - amountDeleted, current.getAmount());
+                current.setAmount(current.getAmount() - toRemove);
+                amountDeleted += toRemove;
+                if (current.getAmount() <= 0) {
+                    iterator.remove();
+                }
+            }
+        }
+
+        player.sendMessage(ChatColor.GREEN + "Deleted " + amountDeleted + " " + formatMaterialName(material) + " from your bundle.");
+
+        // Refresh inventory if open
+        if (player.getOpenInventory().getTopInventory().getHolder() instanceof CategoriesHolder) {
+            player.openInventory(getCategoriesInventory(player));
+        }
     }
 }
