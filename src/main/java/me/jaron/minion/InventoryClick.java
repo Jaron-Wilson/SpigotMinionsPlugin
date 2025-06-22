@@ -36,6 +36,12 @@ public class InventoryClick implements Listener {
 
         event.setCancelled(true);
 
+        // IMPORTANT FIX: Check if the clicked inventory is the player's inventory
+        // If it's the player's inventory (hotbar, etc.), just cancel the event and return
+        if (event.getClickedInventory() != event.getView().getTopInventory()) {
+            return;
+        }
+
         ItemStack clickedItem = event.getCurrentItem();
         if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
@@ -426,6 +432,24 @@ public class InventoryClick implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         if (event.getClickedInventory() == null) return;
 
+        // If player clicked their own inventory while a minion GUI is open, just cancel the event
+        if (event.getClickedInventory() == player.getInventory() &&
+            (event.getInventory().getHolder() instanceof Minion.MinionInventoryHolder ||
+             event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder ||
+             event.getInventory().getHolder() instanceof TargetSelectHolder ||
+             event.getInventory().getHolder() instanceof FarmerTargetSelectHolder ||
+             event.getInventory().getHolder() instanceof TypeConfirmationHolder ||
+             event.getInventory().getHolder() instanceof RemovalConfirmationHolder ||
+             event.getInventory().getHolder() instanceof ConfirmationHolder ||
+             event.getInventory().getHolder() instanceof MinionBundleManager.RawItemsHolder ||
+             event.getInventory().getHolder() instanceof MinionBundleManager.CategoriesHolder ||
+             event.getInventory().getHolder() instanceof MinionBundleManager.MinionsHolder ||
+             event.getInventory().getHolder() instanceof MinionBundleManager.CategoryConfirmationHolder ||
+             event.getInventory().getHolder() instanceof MinionBundleManager.PartialDeletionHolder)) {
+            event.setCancelled(true);
+            return; // Exit early - don't process hotbar clicks
+        }
+
         // Cancel any click in a minion inventory or storage
         if (event.getInventory().getHolder() instanceof Minion.MinionInventoryHolder ||
             event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder ||
@@ -441,6 +465,9 @@ public class InventoryClick implements Listener {
 
             // Only process clicks for items with ItemMeta and display names to fix the bug with wool/target items
             if (!clickedItem.hasItemMeta() || !clickedItem.getItemMeta().hasDisplayName()) return;
+
+            // Only process clicks in the actual GUI inventory, not player inventory
+            if (event.getClickedInventory() != event.getView().getTopInventory()) return;
 
             String displayName = clickedItem.getItemMeta().getDisplayName();
 
