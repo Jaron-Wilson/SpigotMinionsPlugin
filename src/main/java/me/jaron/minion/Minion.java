@@ -96,8 +96,11 @@ public class Minion {
 
         ItemStack selector = createItem(targetMaterial, ChatColor.AQUA + "Target: " + targetName);
         ItemStack storage = createItem(Material.CHEST, ChatColor.BLUE + "Open Minion Storage");
+
+        // Use the dynamic max tier from the upgrade manager instead of hardcoded value
+        int maxTier = plugin.getUpgradeManager().getMaxTier();
         ItemStack upgrade = createItem(Material.EXPERIENCE_BOTTLE, ChatColor.GREEN + "Upgrade Minion" +
-                                     (tier < 5 ? "" : ChatColor.RED + " (Max Tier)"));
+                                     (tier < maxTier ? "" : ChatColor.RED + " (Max Tier)"));
 
         inv.setItem(3, storage);
         inv.setItem(4, selector);
@@ -227,15 +230,106 @@ public class Minion {
         if (!didSomething) {
             boolean storageSystemFull = isStorageFull(mat, storage, chestInv);
             if (storageSystemFull) {
-                minionArmorStand.setCustomName(ChatColor.RED + "Storage Full!");
+                setMinionCustomName(ChatColor.RED + "Storage Full!");
             } else if (block.getType() != mat && block.getType() != Material.AIR) {
-                minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + block.getType());
+                setMinionCustomName(ChatColor.RED + "Occupied: " + block.getType());
             } else {
-                minionArmorStand.setCustomName(ChatColor.RED + "Need " + mat.name());
+                setMinionCustomName(ChatColor.RED + "Need " + mat.name());
             }
         }
 
         minionArmorStand.setCustomNameVisible(true);
+    }
+
+    // Helper method to set minion's custom name with tier-based custom names from config
+    private void setMinionCustomName(String defaultName) {
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+        String minionTypeLower = minionTypeStr.toLowerCase();
+
+        // Extract the action type from the default name to determine what the minion is doing
+        String actionType = "idle"; // Default action
+
+        if (defaultName.contains("Mining")) {
+            actionType = "mining";
+        } else if (defaultName.contains("Planting")) {
+            actionType = "planting";
+        } else if (defaultName.contains("Storage Full")) {
+            actionType = "storage_full";
+        } else if (defaultName.contains("Need")) {
+            actionType = "need_material";
+        } else if (defaultName.contains("Occupied")) {
+            actionType = "occupied";
+        } else if (defaultName.contains("Harvesting")) {
+            actionType = "harvesting";
+        } else if (defaultName.contains("Hoeing")) {
+            actionType = "hoeing";
+        } else if (defaultName.contains("Waiting to grow")) {
+            actionType = "waiting";
+        } else if (defaultName.contains("Applied Bonemeal")) {
+            actionType = "bonemeal";
+        } else if (defaultName.contains("Double Harvest")) {
+            actionType = "double_harvest";
+        } else if (defaultName.contains("Fortune")) {
+            actionType = "fortune";
+        } else if (defaultName.contains("Cannot plant")) {
+            actionType = "cannot_plant";
+        }
+
+        // Try to get action-specific message from config
+        String actionMessage = (String) plugin.getUpgradeManager().getCustomSetting(
+            minionTypeLower, tier, "messages." + actionType, null);
+
+        if (actionMessage != null && !actionMessage.isEmpty()) {
+            minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', actionMessage));
+            return;
+        }
+
+        // Fall back to default action message from default section
+        actionMessage = (String) plugin.getUpgradeManager().getCustomSetting(
+            "default", tier, "messages." + actionType, null);
+
+        if (actionMessage != null && !actionMessage.isEmpty()) {
+            minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', actionMessage));
+            return;
+        }
+
+        // When idle, alternate between display_name (more frequent) and hologram_message (less frequent)
+        if (actionType.equals("idle")) {
+            // Get display_name from config
+            String displayName = plugin.getUpgradeManager().getDisplayName(minionTypeLower, tier);
+
+            // Get hologram_message from config
+            String hologramMessage = plugin.getUpgradeManager().getHologramMessage(minionTypeLower, tier);
+
+            // Random chance to show hologram_message (20% chance) or display_name (80% chance)
+            if (displayName != null && !displayName.isEmpty()) {
+                if (hologramMessage != null && !hologramMessage.isEmpty() && Math.random() < 0.2) {
+                    // 20% chance to show hologram_message
+                    minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', hologramMessage));
+                } else {
+                    // 80% chance to show display_name
+                    minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', displayName));
+                }
+                return;
+            }
+
+            // Fall back to hologram_message if display_name wasn't available
+            if (hologramMessage != null && !hologramMessage.isEmpty()) {
+                minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', hologramMessage));
+                return;
+            }
+        } else {
+            // For non-idle states, use the existing logic for hologram_message
+            String customHologram = plugin.getUpgradeManager().getHologramMessage(minionTypeLower, tier);
+            if (customHologram != null && !customHologram.isEmpty()) {
+                minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', customHologram));
+                return;
+            }
+        }
+
+        // Fall back to default message if no custom messages found
+        minionArmorStand.setCustomName(defaultName);
     }
 
     private void processFarmerCell(int idx) {
@@ -254,7 +348,7 @@ public class Minion {
         try {
             targetCrop = Material.valueOf(targetStr);
         } catch (IllegalArgumentException e) {
-            minionArmorStand.setCustomName(ChatColor.RED + "Invalid Target!");
+            setMinionCustomName(ChatColor.RED + "Invalid Target!");
             minionArmorStand.setCustomNameVisible(true);
             return;
         }
@@ -275,7 +369,7 @@ public class Minion {
                 if (targetCrop != Material.NETHER_WART) {
                     if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK) {
                         soilBlock.setType(Material.FARMLAND);
-                        minionArmorStand.setCustomName(ChatColor.GREEN + "Hoeing...");
+                        setMinionCustomName(ChatColor.GREEN + "Hoeing...");
                         minionArmorStand.swingMainHand();
                     }
                 }
@@ -284,7 +378,7 @@ public class Minion {
                 if (cropBlock.getType() == Material.AIR && soilBlock.getType() == Material.FARMLAND) {
                     if (canPlant(cropBlock, targetCrop)) {
                         tryPlanting(cropBlock, targetCrop);
-                        minionArmorStand.setCustomName(ChatColor.GREEN + "Planting...");
+                        setMinionCustomName(ChatColor.GREEN + "Planting...");
                     }
                 }
                 break;
@@ -295,7 +389,7 @@ public class Minion {
                     if (ageable.getAge() == ageable.getMaximumAge()) {
                         harvestAndReplant(cropBlock, targetCrop);
                     } else {
-                        minionArmorStand.setCustomName(ChatColor.YELLOW + "Waiting to grow");
+                        setMinionCustomName(ChatColor.YELLOW + "Waiting to grow");
 
                         // Apply bonemeal chance based on tier
                         if (boneMealChance > 0 && Math.random() < boneMealChance) {
@@ -308,7 +402,7 @@ public class Minion {
                                 Ageable newAgeable = (Ageable) ageable.clone();
                                 newAgeable.setAge(Math.min(currentAge + 1, maxAge));
                                 cropBlock.setBlockData(newAgeable);
-                                minionArmorStand.setCustomName(ChatColor.GREEN + "Applied Bonemeal Effect");
+                                setMinionCustomName(ChatColor.GREEN + "Applied Bonemeal Effect");
                             }
                         }
                     }
@@ -319,10 +413,10 @@ public class Minion {
                     if (canPlant(cropBlock, targetCrop)) {
                         tryPlanting(cropBlock, targetCrop);
                     } else {
-                        minionArmorStand.setCustomName(ChatColor.RED + "Cannot plant here");
+                        setMinionCustomName(ChatColor.RED + "Cannot plant here");
                     }
                 } else if (cropBlock.getType() != Material.AIR) {
-                    minionArmorStand.setCustomName(ChatColor.RED + "Occupied: " + cropBlock.getType());
+                    setMinionCustomName(ChatColor.RED + "Occupied: " + cropBlock.getType());
                 }
                 break;
         }
@@ -376,7 +470,7 @@ public class Minion {
     }
 
     private void harvestAndReplant(Block block, Material targetCrop) {
-        minionArmorStand.setCustomName(ChatColor.GREEN + "Harvesting");
+        setMinionCustomName(ChatColor.GREEN + "Harvesting");
         minionArmorStand.swingMainHand();
 
         World world = block.getWorld();
@@ -399,7 +493,7 @@ public class Minion {
                 if (drop.getType() != seedType) {
                     ItemStack clone = drop.clone();
                     extraDrops.add(clone);
-                    minionArmorStand.setCustomName(ChatColor.GREEN + "Double Harvest!");
+                    setMinionCustomName(ChatColor.GREEN + "Double Harvest!");
                 }
             }
             drops.addAll(extraDrops);
@@ -443,10 +537,10 @@ public class Minion {
                 }
             }
 
-            minionArmorStand.setCustomName(ChatColor.GREEN + "Planting");
+            setMinionCustomName(ChatColor.GREEN + "Planting");
             block.setType(getPlantableCrop(targetCrop));
         } else {
-            minionArmorStand.setCustomName(ChatColor.RED + "Cannot plant here");
+            setMinionCustomName(ChatColor.RED + "Cannot plant here");
         }
     }
 
@@ -498,7 +592,7 @@ public class Minion {
     }
 
     private boolean plantBlock(Block block, Material mat) {
-        minionArmorStand.setCustomName(ChatColor.GREEN + "Planting");
+        setMinionCustomName(ChatColor.GREEN + "Planting");
         block.setType(mat);
         return true;
     }
@@ -522,7 +616,7 @@ public class Minion {
     public Boolean minionMineEvent(Block block, Inventory chestInv, Inventory storage, World world) {
         if (storage == null) return false;
 
-        minionArmorStand.setCustomName(ChatColor.GOLD + "Mining");
+        setMinionCustomName(ChatColor.GOLD + "Mining");
         minionArmorStand.swingMainHand();
 
         // Get tier for fortune ability
@@ -541,7 +635,7 @@ public class Minion {
                 // Don't duplicate special rare items or blocks that should remain singular
                 if (!isSpecialRareDrop(extraDrop.getType())) {
                     extraDrops.add(extraDrop);
-                    minionArmorStand.setCustomName(ChatColor.GREEN + "Fortune Effect!");
+                    setMinionCustomName(ChatColor.GREEN + "Fortune Effect!");
                 }
             }
             drops.addAll(extraDrops);

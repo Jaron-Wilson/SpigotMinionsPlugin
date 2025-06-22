@@ -8,68 +8,470 @@ default:
       delay: 5000  # Base delay in milliseconds between actions for tier 1 (5 seconds)
       efficiency: 1.0  # Base efficiency multiplier (affects success rate)
       range: 2  # Range of blocks the minion can reach
+      display_name: "&7Basic Minion"
+      hologram_message: "&7Working..."
+      # Action-specific messages for tier 1
+      messages:
+        mining: "&7Mining..."
+        planting: "&7Planting..."
+        harvesting: "&7Harvesting..."
+        hoeing: "&7Preparing soil..."
+        waiting: "&7Waiting for crops..."
+        storage_full: "&c⚠ Storage Full! &c⚠"
+        need_material: "&7Need more materials..."
+        occupied: "&7This spot is occupied..."
+        bonemeal: "&7Applied fertilizer!"
+        double_harvest: "&7Double harvest!"
+        fortune: "&7Lucky mining!"
+        cannot_plant: "&7Cannot plant here..."
     2:
       delay: 4000  # 4 seconds
       efficiency: 1.2
       range: 3
+      display_name: "&7Improved Minion"
+      hologram_message: "&7Working harder..."
+      messages:
+        mining: "&7Mining quickly..."
+        planting: "&7Planting seeds..."
+        harvesting: "&7Harvesting crops..."
+        storage_full: "&c⚠ Storage Full! &c⚠"
     3:
       delay: 3000  # 3 seconds
       efficiency: 1.5
       range: 3
+      display_name: "&eAdvanced Minion"
+      hologram_message: "&eWorking efficiently!"
+      messages:
+        mining: "&eMining efficiently!"
+        planting: "&ePlanting with precision!"
+        harvesting: "&eHarvesting with skill!"
+        fortune: "&e✧ Fortune smiled upon me! ✧"
+        double_harvest: "&e✧ Double harvest! ✧"
+        storage_full: "&c⚠ Storage Overflow! &c⚠"
     4:
       delay: 2000  # 2 seconds
       efficiency: 1.8
       range: 4
+      display_name: "&eSuperior Minion"
+      hologram_message: "&eWorking super fast!"
+      messages:
+        mining: "&eMining at high speed!"
+        planting: "&ePlanting rapidly!"
+        bonemeal: "&e✧ Growth accelerated! ✧"
+        storage_full: "&c⚠ Storage Capacity Exceeded! &c⚠"
     5:
       delay: 1000  # 1 second
       efficiency: 2.0
       range: 5
+      display_name: "&6Expert Minion"
+      hologram_message: "&6I am speed!"
+      messages:
+        mining: "&6Mining with expertise!"
+        planting: "&6Planting expertly!"
+        harvesting: "&6Harvesting like a pro!"
+        fortune: "&6⚡ Fortune x2! ⚡"
+        double_harvest: "&6⚡ Double bounty! ⚡"
+    # You can add more tiers with additional customizations
+    6:
+      delay: 900
+      efficiency: 2.5
+      range: 5
+      display_name: "&6Master Minion"
+      hologram_message: "&6Working at light speed!"
+      messages:
+        mining: "&6⚡ Rapid mining! ⚡"
+        planting: "&6Expert planting techniques!"
+      potion_effects:
+        - HASTE:1
+    7:
+      delay: 800
+      efficiency: 3.0
+      range: 6
+      display_name: "&bElite Minion"
+      hologram_message: "&bI'm too fast to see!"
+      messages:
+        mining: "&b⚡ Mining frenzy! ⚡"
+        fortune: "&b✦ Fortune x3! ✦"
+      potion_effects:
+        - HASTE:1
+        - SPEED:1
+    8:
+      delay: 700
+      efficiency: 3.5
+      range: 6
+      display_name: "&bSupreme Minion"
+      hologram_message: "&bWorking at warp speed!"
+      messages:
+        mining: "&b⚡ Supreme mining! ⚡"
+        fortune: "&b★ Fortune bonanza! ★"
+      potion_effects:
+        - HASTE:2
+        - SPEED:1
+    9:
+      delay: 600
+      efficiency: 4.0
+      range: 7
+      display_name: "&5Legendary Minion"
+      hologram_message: "&5I control time and space!"
+      messages:
+        mining: "&5⚡ Legendary mining! ⚡"
+        fortune: "&5✧ Cosmic fortune! ✧"
+        double_harvest: "&5✧ Legendary bounty! ✧"
+      potion_effects:
+        - HASTE:2
+        - SPEED:2
+        - NIGHT_VISION:1
+    10:
+      delay: 500
+      efficiency: 5.0
+      range: 8
+      display_name: "&dUltimate Minion"
+      hologram_message: "&dI am beyond comprehension!"
+      messages:
+        mining: "&d⚡ Reality-warping mining! ⚡"
+        fortune: "&d✦ Divine fortune! ✦"
+        planting: "&dPlanting with godlike speed!"
+        harvesting: "&dHarvesting with divine power!"
+      potion_effects:
+        - HASTE:3
+        - SPEED:2
+        - NIGHT_VISION:1
+        - FIRE_RESISTANCE:1
+      special_abilities:
+        - AUTO_SMELT
+        - SILK_TOUCH
 
 # Specific settings for each minion type
 miner:
   tiers:
     1:
       fortune_chance: 0.0  # Chance to get extra drops (0-1)
+      hologram_message: "&7Mining away..."
+      messages:
+        mining: "&7Mining stone..."
+        fortune: "&7Found extra resources!"
     2:
-      fortune_chance: 0.1
+      fortune_chance: 0.05
+      hologram_message: "&7Mining faster..."
+      messages:
+        mining: "&7Mining efficiently..."
+        fortune: "&7Extra ore found!"
     3:
-      fortune_chance: 0.2
+      fortune_chance: 0.1
+      hologram_message: "&eMining like a pro!"
+      messages:
+        mining: "&eSwinging pickaxe with skill!"
+        fortune: "&e✧ Fortune struck! ✧"
     4:
-      fortune_chance: 0.3
+      fortune_chance: 0.2
+      hologram_message: "&eSwinging my pickaxe!"
+      messages:
+        mining: "&eBreaking rocks with enthusiasm!"
+        fortune: "&e✧ Fortune blessed me! ✧"
     5:
+      fortune_chance: 0.3
+      hologram_message: "&6I'm a mining machine!"
+      messages:
+        mining: "&6Digging with expertise!"
+        fortune: "&6⚡ Fortune bonus! ⚡"
+    6:
+      fortune_chance: 0.35
+      hologram_message: "&6Rocks don't stand a chance!"
+      messages:
+        mining: "&6Smashing rocks effortlessly!"
+        fortune: "&6⚡ Double the loot! ⚡"
+      potion_effects:
+        - HASTE:1
+    7:
+      fortune_chance: 0.4
+      hologram_message: "&bI eat ores for breakfast!"
+      messages:
+        mining: "&bMining at hyperspeed!"
+        fortune: "&b✦ Bonus ore jackpot! ✦"
+      potion_effects:
+        - HASTE:2
+    8:
+      fortune_chance: 0.45
+      hologram_message: "&bDiamond hunter!"
+      messages:
+        mining: "&b⚡ Speed-drilling through stone! ⚡"
+        fortune: "&b★ Fortune favors me today! ★"
+      potion_effects:
+        - HASTE:2
+        - NIGHT_VISION:1
+    9:
       fortune_chance: 0.5
+      hologram_message: "&5Ancient one of mining!"
+      messages:
+        mining: "&5⚡ Mining with mystical power! ⚡"
+        fortune: "&5✧ Cosmic ore multiplication! ✧"
+      potion_effects:
+        - HASTE:3
+        - NIGHT_VISION:1
+    10:
+      fortune_chance: 0.6
+      hologram_message: "&dI am the mountain destroyer!"
+      messages:
+        mining: "&d⚡ Reality-warping mining! ⚡"
+        fortune: "&d✦ Divine ore multiplication! ✦"
+      ore_doubling: true
+      potion_effects:
+        - HASTE:3
+        - NIGHT_VISION:1
+        - FIRE_RESISTANCE:1
+      special_abilities:
+        - AUTO_SMELT
+        - SILK_TOUCH
 
 farmer:
   tiers:
     1:
       bonemeal_chance: 0.0  # Chance to apply bonemeal effect (0-1)
       double_crops: 0.0  # Chance to get double harvest (0-1)
+      hologram_message: "&7Farming slowly..."
+      messages:
+        planting: "&7Planting seeds..."
+        harvesting: "&7Harvesting crops..."
+        hoeing: "&7Tilling soil..."
+        waiting: "&7Watching crops grow..."
     2:
+      bonemeal_chance: 0.05
+      double_crops: 0.03
+      hologram_message: "&7Growing crops..."
+      messages:
+        planting: "&7Sowing seeds carefully..."
+        harvesting: "&7Collecting crops..."
+        hoeing: "&7Preparing farmland..."
+    3:
       bonemeal_chance: 0.1
       double_crops: 0.05
-    3:
+      hologram_message: "&eFarming efficiently!"
+      messages:
+        planting: "&ePlanting with precision!"
+        harvesting: "&eGathering the harvest!"
+        bonemeal: "&eHelping plants grow!"
+        double_harvest: "&e✧ Bonus crops! ✧"
+    4:
       bonemeal_chance: 0.2
       double_crops: 0.1
-    4:
-      bonemeal_chance: 0.3
-      double_crops: 0.2
+      hologram_message: "&eGreen thumb farmer!"
+      messages:
+        planting: "&ePlanting with skill!"
+        harvesting: "&eHarvesting bountifully!"
+        bonemeal: "&e✧ Growth accelerated! ✧"
+        double_harvest: "&e✧ Double harvest! ✧"
     5:
+      bonemeal_chance: 0.3
+      double_crops: 0.15
+      hologram_message: "&6Master of harvests!"
+      messages:
+        planting: "&6Expert planting technique!"
+        harvesting: "&6Collecting a rich harvest!"
+        bonemeal: "&6Making plants thrive!"
+        double_harvest: "&6⚡ Double bounty! ⚡"
+    6:
+      bonemeal_chance: 0.35
+      double_crops: 0.18
+      hologram_message: "&6Plants grow for me!"
+      messages:
+        planting: "&6Precisely placing seeds!"
+        harvesting: "&6Reaping what I've sown!"
+        waiting: "&6Encouraging growth..."
+        double_harvest: "&6⚡ Bonus crops! ⚡"
+      potion_effects:
+        - SPEED:1
+    7:
+      bonemeal_chance: 0.4
+      double_crops: 0.2
+      hologram_message: "&bNature's friend!"
+      messages:
+        planting: "&bRapid planting techniques!"
+        harvesting: "&bCollecting nature's bounty!"
+        bonemeal: "&b✦ Growth acceleration! ✦"
+        double_harvest: "&b✦ Abundant harvest! ✦"
+      potion_effects:
+        - SPEED:1
+        - JUMP_BOOST:1
+    8:
+      bonemeal_chance: 0.45
+      double_crops: 0.23
+      hologram_message: "&bCrop whisperer!"
+      messages:
+        planting: "&b⚡ Speed planting! ⚡"
+        harvesting: "&b⚡ Speed harvesting! ⚡"
+        bonemeal: "&b★ Super growth! ★"
+        double_harvest: "&b★ Bountiful harvest! ★"
+      potion_effects:
+        - SPEED:2
+        - JUMP_BOOST:1
+    9:
       bonemeal_chance: 0.5
+      double_crops: 0.25
+      hologram_message: "&5Plant magician!"
+      messages:
+        planting: "&5⚡ Magical planting! ⚡"
+        harvesting: "&5⚡ Magical harvesting! ⚡"
+        bonemeal: "&5✧ Mystical growth! ✧"
+        double_harvest: "&5✧ Enchanted harvest! ✧"
+      potion_effects:
+        - SPEED:2
+        - JUMP_BOOST:2
+    10:
+      bonemeal_chance: 0.6
       double_crops: 0.3
+      hologram_message: "&dI am one with nature!"
+      messages:
+        planting: "&d⚡ Divine planting! ⚡"
+        harvesting: "&d⚡ Divine harvesting! ⚡"
+        bonemeal: "&d✦ Supernatural growth! ✦"
+        double_harvest: "&d✦ Divine abundance! ✦"
+        waiting: "&dCommuning with plants..."
+      instant_growth: true
+      crop_protection: true
+      potion_effects:
+        - SPEED:3
+        - JUMP_BOOST:2
+        - WATER_BREATHING:1
+      special_abilities:
+        - NO_HUNGER
+        - FERTILITY
 
 lumberjack:
   tiers:
     1:
       replant_saplings: false  # Whether minion replants saplings
+      hologram_message: "&7Chopping wood..."
+      messages:
+        mining: "&7Chopping trees..."
+        planting: "&7Cannot replant yet..."
     2:
       replant_saplings: true
+      hologram_message: "&7Lumber and plant..."
+      messages:
+        mining: "&7Cutting down trees..."
+        planting: "&7Planting saplings..."
     3:
       replant_saplings: true
+      hologram_message: "&eCutting logs swiftly!"
+      messages:
+        mining: "&eEfficiently chopping wood!"
+        planting: "&ePlanting saplings efficiently!"
     4:
       replant_saplings: true
+      hologram_message: "&eLumber professional!"
+      messages:
+        mining: "&eExpert tree cutting!"
+        planting: "&eQuickly replanting trees!"
     5:
       replant_saplings: true
+      hologram_message: "&6Master lumberjack!"
+      messages:
+        mining: "&6Chopping trees with expertise!"
+        planting: "&6Expertly replanting forests!"
       # Additional settings can be added here
+    6:
+      replant_saplings: true
+      extra_saplings_chance: 0.1
+      hologram_message: "&6I speak for the trees!"
+      messages:
+        mining: "&6Harvesting wood swiftly!"
+        planting: "&6Nurturing new saplings!"
+      potion_effects:
+        - HASTE:1
+    7:
+      replant_saplings: true
+      extra_saplings_chance: 0.15
+      hologram_message: "&bTree whisperer!"
+      messages:
+        mining: "&b⚡ Rapid wood collecting! ⚡"
+        planting: "&bCommunicating with saplings..."
+      potion_effects:
+        - HASTE:1
+        - JUMP_BOOST:1
+    8:
+      replant_saplings: true
+      extra_saplings_chance: 0.2
+      hologram_message: "&bForest guardian!"
+      messages:
+        mining: "&b⚡ Forest harvesting! ⚡"
+        planting: "&bRegrowing the forest!"
+      potion_effects:
+        - HASTE:2
+        - JUMP_BOOST:1
+    9:
+      replant_saplings: true
+      extra_saplings_chance: 0.25
+      hologram_message: "&5Ancient forest spirit!"
+      messages:
+        mining: "&5⚡ Ancient tree-cutting techniques! ⚡"
+        planting: "&5Creating magical forests!"
+      potion_effects:
+        - HASTE:2
+        - JUMP_BOOST:2
+    10:
+      replant_saplings: true
+      extra_saplings_chance: 0.3
+      hologram_message: "&dI am Groot!"
+      messages:
+        mining: "&d⚡ Divine woodcutting! ⚡"
+        planting: "&dCreating enchanted forests!"
+        fortune: "&d✦ Magic wood multiplication! ✦"
+      full_tree_harvest: true
+      potion_effects:
+        - HASTE:3
+        - JUMP_BOOST:2
+        - FIRE_RESISTANCE:1
+      special_abilities:
+        - SILK_TOUCH
+        - AUTO_PLANT
+
+# Add a new minion type example
+fisher:
+  tiers:
+    1:
+      catch_speed: 1.0
+      treasure_chance: 0.0
+      hologram_message: "&7Fishing slowly..."
+      messages:
+        mining: "&7Fishing..." # Mining action for fisher is actually fishing
+        planting: "&7Casting line..." # Planting for fisher is casting the line
+    3:
+      catch_speed: 1.5
+      treasure_chance: 0.05
+      hologram_message: "&eFishing with skill!"
+      messages:
+        mining: "&eFishing patiently..."
+        fortune: "&e✧ Found treasure! ✧"
+    5:
+      catch_speed: 2.0
+      treasure_chance: 0.1
+      hologram_message: "&6Master angler!"
+      messages:
+        mining: "&6Expert fishing technique!"
+        fortune: "&6⚡ Treasure found! ⚡"
+    7:
+      catch_speed: 2.5
+      treasure_chance: 0.15
+      hologram_message: "&bDeep sea fisher!"
+      messages:
+        mining: "&b⚡ Deep sea fishing! ⚡"
+        fortune: "&b✦ Ancient treasure! ✦"
+      potion_effects:
+        - WATER_BREATHING:1
+    10:
+      catch_speed: 3.0
+      treasure_chance: 0.2
+      hologram_message: "&dI am Poseidon!"
+      messages:
+        mining: "&d⚡ Mythical fishing! ⚡"
+        fortune: "&d✦ Divine treasure found! ✦"
+      enchanted_catch_chance: 0.1
+      potion_effects:
+        - WATER_BREATHING:1
+        - DOLPHIN_GRACE:1
+      special_abilities:
+        - MAGNETIC_LURE
+        - TREASURE_HUNTER
 
 # Upgrade costs (in terms of items required)
 upgrade_costs:
@@ -86,3 +488,19 @@ upgrade_costs:
   5:
     NETHERITE_INGOT: 4
     NETHER_STAR: 1
+  6:
+    NETHERITE_INGOT: 8
+    NETHER_STAR: 2
+  7:
+    NETHERITE_INGOT: 16
+    NETHER_STAR: 4
+  8:
+    NETHERITE_BLOCK: 1
+    NETHER_STAR: 8
+  9:
+    NETHERITE_BLOCK: 2
+    DRAGON_EGG: 1
+  10:
+    NETHERITE_BLOCK: 4
+    DRAGON_BREATH: 64
+    END_CRYSTAL: 8

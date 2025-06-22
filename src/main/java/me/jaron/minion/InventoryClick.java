@@ -73,7 +73,9 @@ public class InventoryClick implements Listener {
         } else if (event.getSlot() == 6) { // Upgrade Minion
             // Handle upgrade button
             int currentTier = armorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
-            if (currentTier < 5) {
+            // Use the dynamic max tier from the upgrade manager instead of hardcoded value
+            int maxTier = plugin.getUpgradeManager().getMaxTier();
+            if (currentTier < maxTier) {
                 int targetTier = currentTier + 1;
 
                 // Check if upgrade path exists
@@ -580,7 +582,9 @@ public class InventoryClick implements Listener {
                 player.openInventory(minion.getActionInventory());
             } else if (displayName.equals(ChatColor.GREEN + "Upgrade Minion")) {
                 int currentTier = armorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
-                if (currentTier < 5) {
+                // Use the dynamic max tier from the upgrade manager instead of hardcoded value
+                int maxTier = plugin.getUpgradeManager().getMaxTier();
+                if (currentTier < maxTier) {
                     int targetTier = currentTier + 1;
 
                     // Check if upgrade path exists
