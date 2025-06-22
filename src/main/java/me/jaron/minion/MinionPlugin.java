@@ -32,7 +32,7 @@ import org.bukkit.World;
 public class MinionPlugin extends JavaPlugin {
 
     public final NamespacedKey ownerKey = new NamespacedKey(this, "minion_owner");
-    public final NamespacedKey isMinionKey = new NamespacedKey(this, "is_minion");
+    public final NamespacedKey isMinionKey = new NamespacedKey(this, "minion_is_minion");
     public final NamespacedKey minionEggKey = new NamespacedKey(this, "minion_spawn_egg");
     public final NamespacedKey tierKey = new NamespacedKey(this, "minion_tier");
     public final NamespacedKey modeKey = new NamespacedKey(this, "minion_mode");
@@ -42,6 +42,7 @@ public class MinionPlugin extends JavaPlugin {
     public final NamespacedKey wantsSeedsKey = new NamespacedKey(this, "minion_wants_seeds");
     public final NamespacedKey farmerStateKey = new NamespacedKey(this, "farmer_state");
     public final NamespacedKey lastActionTimeKey = new NamespacedKey(this, "last_action_time");
+    public final NamespacedKey statsKey = new NamespacedKey(this, "minion_stats");
 
     private static MinionPlugin instance;
 
@@ -50,6 +51,8 @@ public class MinionPlugin extends JavaPlugin {
     private final Map<UUID, List<Minion>> minions = new HashMap<>();
     private MinionBundleManager bundleManager;
     private MinionUpgradeManager upgradeManager;
+
+    private final Map<UUID, MinionStats> minionStats = new HashMap<>();
 
     public Map<UUID, List<Minion>> getMinions() {
         return minions;
@@ -241,6 +244,22 @@ public class MinionPlugin extends JavaPlugin {
         } catch (IOException e) {
             getLogger().warning("Failed to save bundle storage data: " + e.getMessage());
         }
+
+        // Save minion statistics
+        File statsFile = new File(dataFolder, "minion-stats.yml");
+        YamlConfiguration statsConfig = new YamlConfiguration();
+
+        for (Map.Entry<UUID, MinionStats> entry : minionStats.entrySet()) {
+            String path = "stats." + entry.getKey().toString();
+            statsConfig.set(path, entry.getValue().serialize());
+        }
+
+        try {
+            statsConfig.save(statsFile);
+            getLogger().info("Successfully saved minion statistics data!");
+        } catch (IOException e) {
+            getLogger().warning("Failed to save minion statistics data: " + e.getMessage());
+        }
     }
 
     private void loadAllData() {
@@ -297,6 +316,29 @@ public class MinionPlugin extends JavaPlugin {
             bundleManager.loadData(bundleConfig);
             getLogger().info("Successfully loaded bundle data!");
         }
+
+        // Load minion statistics
+        File statsFile = new File(dataFolder, "minion-stats.yml");
+        if (statsFile.exists()) {
+            YamlConfiguration statsConfig = YamlConfiguration.loadConfiguration(statsFile);
+
+            if (statsConfig.contains("stats")) {
+                ConfigurationSection statsSection = statsConfig.getConfigurationSection("stats");
+                if (statsSection != null) {
+                    for (String uuidStr : statsSection.getKeys(false)) {
+                        try {
+                            UUID uuid = UUID.fromString(uuidStr);
+                            Map<String, Object> serialized = statsSection.getConfigurationSection(uuidStr).getValues(false);
+                            MinionStats stats = new MinionStats(serialized);
+                            minionStats.put(uuid, stats);
+                        } catch (Exception e) {
+                            getLogger().warning("Error loading stats for minion " + uuidStr + ": " + e.getMessage());
+                        }
+                    }
+                }
+            }
+            getLogger().info("Successfully loaded minion statistics data!");
+        }
     }
 
     private void loadMinions() {
@@ -349,4 +391,61 @@ public class MinionPlugin extends JavaPlugin {
         }
         inv.setItem(inv.getSize() - 1, back);
     }
+
+    // Methods for managing minion stats
+    public MinionStats getMinionStats(UUID minionUUID) {
+        return minionStats.computeIfAbsent(minionUUID, uuid -> new MinionStats());
+    }
+
+    public void saveMinionStats() {
+        File dataFolder = getDataFolder();
+        if (!dataFolder.exists()) {
+            dataFolder.mkdirs();
+        }
+
+        File statsFile = new File(dataFolder, "minion-stats.yml");
+        YamlConfiguration statsConfig = new YamlConfiguration();
+
+        for (Map.Entry<UUID, MinionStats> entry : minionStats.entrySet()) {
+            String path = "stats." + entry.getKey().toString();
+            statsConfig.set(path, entry.getValue().serialize());
+        }
+
+        try {
+            statsConfig.save(statsFile);
+            getLogger().info("Successfully saved minion statistics data!");
+        } catch (IOException e) {
+            getLogger().warning("Failed to save minion statistics data: " + e.getMessage());
+        }
+    }
+
+    public void loadMinionStats() {
+        File dataFolder = getDataFolder();
+        if (!dataFolder.exists()) {
+            return;
+        }
+
+        File statsFile = new File(dataFolder, "minion-stats.yml");
+        if (statsFile.exists()) {
+            YamlConfiguration statsConfig = YamlConfiguration.loadConfiguration(statsFile);
+
+            if (statsConfig.contains("stats")) {
+                ConfigurationSection statsSection = statsConfig.getConfigurationSection("stats");
+                if (statsSection != null) {
+                    for (String uuidStr : statsSection.getKeys(false)) {
+                        try {
+                            UUID uuid = UUID.fromString(uuidStr);
+                            Map<String, Object> serialized = statsSection.getConfigurationSection(uuidStr).getValues(false);
+                            MinionStats stats = new MinionStats(serialized);
+                            minionStats.put(uuid, stats);
+                        } catch (Exception e) {
+                            getLogger().warning("Error loading stats for minion " + uuidStr + ": " + e.getMessage());
+                        }
+                    }
+                }
+            }
+            getLogger().info("Successfully loaded minion statistics data!");
+        }
+    }
 }
+

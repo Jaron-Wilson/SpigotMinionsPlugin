@@ -64,6 +64,9 @@ public class InventoryClick implements Listener {
             byte wantsSeeds = armorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1);
             armorStand.getPersistentDataContainer().set(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)(wantsSeeds == 1 ? 0 : 1));
             player.openInventory(minion.getActionInventory());
+        } else if (event.getSlot() == 2) { // View Stats
+            // Open the stats inventory
+            player.openInventory(minion.getStatsInventory());
         } else if (clickedItem.getType() == Material.CHEST) {
             player.openInventory(minion.getMinionStorage());
         } else if (clickedItem.getType() == Material.BARRIER) {

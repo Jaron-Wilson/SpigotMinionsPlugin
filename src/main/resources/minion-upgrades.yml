@@ -8,7 +8,7 @@ default:
       delay: 5000  # Base delay in milliseconds between actions for tier 1 (5 seconds)
       efficiency: 1.0  # Base efficiency multiplier (affects success rate)
       range: 2  # Range of blocks the minion can reach
-      display_name: "&7Basic Minion"
+      display_name: "&7Basic Minion &6 Tier 1"
       hologram_message: "&7Working..."
       # Action-specific messages for tier 1
       messages:
@@ -28,18 +28,17 @@ default:
       delay: 4000  # 4 seconds
       efficiency: 1.2
       range: 3
-      display_name: "&7Improved Minion"
+      display_name: "&7Improved Minion &6 Tier 2"
       hologram_message: "&7Working harder..."
       messages:
         mining: "&7Mining quickly..."
-        planting: "&7Planting seeds..."
         harvesting: "&7Harvesting crops..."
         storage_full: "&c⚠ Storage Full! &c⚠"
     3:
       delay: 3000  # 3 seconds
       efficiency: 1.5
       range: 3
-      display_name: "&eAdvanced Minion"
+      display_name: "&eAdvanced Minion &6 Tier 3"
       hologram_message: "&eWorking efficiently!"
       messages:
         mining: "&eMining efficiently!"
@@ -52,7 +51,7 @@ default:
       delay: 2000  # 2 seconds
       efficiency: 1.8
       range: 4
-      display_name: "&eSuperior Minion"
+      display_name: "&eSuperior Minion &6 Tier 4"
       hologram_message: "&eWorking super fast!"
       messages:
         mining: "&eMining at high speed!"
@@ -63,7 +62,7 @@ default:
       delay: 1000  # 1 second
       efficiency: 2.0
       range: 5
-      display_name: "&6Expert Minion"
+      display_name: "&6Expert Minion &6 Tier 5"
       hologram_message: "&6I am speed!"
       messages:
         mining: "&6Mining with expertise!"
@@ -76,7 +75,7 @@ default:
       delay: 900
       efficiency: 2.5
       range: 5
-      display_name: "&6Master Minion"
+      display_name: "&6Master Minion &6 Tier 6"
       hologram_message: "&6Working at light speed!"
       messages:
         mining: "&6⚡ Rapid mining! ⚡"
@@ -87,7 +86,7 @@ default:
       delay: 800
       efficiency: 3.0
       range: 6
-      display_name: "&bElite Minion"
+      display_name: "&bElite Minion &6 Tier 7"
       hologram_message: "&bI'm too fast to see!"
       messages:
         mining: "&b⚡ Mining frenzy! ⚡"
@@ -99,7 +98,7 @@ default:
       delay: 700
       efficiency: 3.5
       range: 6
-      display_name: "&bSupreme Minion"
+      display_name: "&bSupreme Minion &6 Tier 8"
       hologram_message: "&bWorking at warp speed!"
       messages:
         mining: "&b⚡ Supreme mining! ⚡"
@@ -111,7 +110,7 @@ default:
       delay: 600
       efficiency: 4.0
       range: 7
-      display_name: "&5Legendary Minion"
+      display_name: "&5Legendary Minion &6 Tier 9"
       hologram_message: "&5I control time and space!"
       messages:
         mining: "&5⚡ Legendary mining! ⚡"
@@ -125,7 +124,7 @@ default:
       delay: 500
       efficiency: 5.0
       range: 8
-      display_name: "&dUltimate Minion"
+      display_name: "&dUltimate Minion &6 Tier 10+"
       hologram_message: "&dI am beyond comprehension!"
       messages:
         mining: "&d⚡ Reality-warping mining! ⚡"
@@ -160,6 +159,7 @@ miner:
       fortune_chance: 0.1
       hologram_message: "&eMining like a pro!"
       messages:
+        planting: "&ePlacing these things like &6crazy!"
         mining: "&eSwinging pickaxe with skill!"
         fortune: "&e✧ Fortune struck! ✧"
     4:

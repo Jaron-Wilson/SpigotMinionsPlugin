@@ -20,11 +20,7 @@ import org.bukkit.block.data.Ageable;
 import me.jaron.minion.FarmerState;
 
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class Minion {
@@ -96,12 +92,14 @@ public class Minion {
 
         ItemStack selector = createItem(targetMaterial, ChatColor.AQUA + "Target: " + targetName);
         ItemStack storage = createItem(Material.CHEST, ChatColor.BLUE + "Open Minion Storage");
+        ItemStack stats = createItem(Material.BOOK, ChatColor.GREEN + "View Minion Statistics");
 
         // Use the dynamic max tier from the upgrade manager instead of hardcoded value
         int maxTier = plugin.getUpgradeManager().getMaxTier();
         ItemStack upgrade = createItem(Material.EXPERIENCE_BOTTLE, ChatColor.GREEN + "Upgrade Minion" +
                                      (tier < maxTier ? "" : ChatColor.RED + " (Max Tier)"));
 
+        inv.setItem(2, stats);
         inv.setItem(3, storage);
         inv.setItem(4, selector);
         inv.setItem(6, upgrade);
@@ -484,6 +482,10 @@ public class Minion {
 
         Collection<ItemStack> drops = new ArrayList<>(block.getDrops());
 
+        // Get minion stats
+        MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
+        stats.incrementTimesHarvested();
+
         // Apply double crops chance based on tier
         if (doubleCropsChance > 0 && Math.random() < doubleCropsChance) {
             // Clone the drops to simulate getting double
@@ -494,6 +496,7 @@ public class Minion {
                     ItemStack clone = drop.clone();
                     extraDrops.add(clone);
                     setMinionCustomName(ChatColor.GREEN + "Double Harvest!");
+                    stats.incrementDoubleCropsProcs();
                 }
             }
             drops.addAll(extraDrops);
@@ -539,6 +542,10 @@ public class Minion {
 
             setMinionCustomName(ChatColor.GREEN + "Planting");
             block.setType(getPlantableCrop(targetCrop));
+
+            // Track planting statistics
+            MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
+            stats.incrementItemsPlaced();
         } else {
             setMinionCustomName(ChatColor.RED + "Cannot plant here");
         }
@@ -594,6 +601,11 @@ public class Minion {
     private boolean plantBlock(Block block, Material mat) {
         setMinionCustomName(ChatColor.GREEN + "Planting");
         block.setType(mat);
+
+        // Track planting statistics
+        MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
+        stats.incrementItemsPlaced();
+
         return true;
     }
 
@@ -626,6 +638,10 @@ public class Minion {
         // Get initial drops
         Collection<ItemStack> drops = new ArrayList<>(block.getDrops());
 
+        // Get minion stats
+        MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
+        stats.incrementItemsMined();
+
         // Apply fortune chance based on tier
         if (fortuneChance > 0 && Math.random() < fortuneChance) {
             // Add extra items (similar to Fortune enchantment)
@@ -636,6 +652,7 @@ public class Minion {
                 if (!isSpecialRareDrop(extraDrop.getType())) {
                     extraDrops.add(extraDrop);
                     setMinionCustomName(ChatColor.GREEN + "Fortune Effect!");
+                    stats.incrementFortuneProcs();
                 }
             }
             drops.addAll(extraDrops);
@@ -743,5 +760,102 @@ public class Minion {
         public Inventory getInventory() {
             return null;
         }
+    }
+
+    public Inventory getStatsInventory() {
+        Inventory inv = Bukkit.createInventory(new MinionInventoryHolder(minionArmorStand.getUniqueId()), 27, "Minion Statistics");
+
+        // Get minion stats
+        MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
+
+        // Get minion info
+        String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+        MinionType minionType = MinionType.valueOf(minionTypeStr);
+        int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+
+        // Create title item
+        ItemStack titleItem;
+        if (minionType == MinionType.BLOCK_MINER) {
+            titleItem = createItem(Material.DIAMOND_PICKAXE, ChatColor.GOLD + "Block Miner Statistics " + ChatColor.WHITE + "[Tier " + tier + "]");
+        } else {
+            titleItem = createItem(Material.DIAMOND_HOE, ChatColor.GOLD + "Farmer Statistics " + ChatColor.WHITE + "[Tier " + tier + "]");
+        }
+
+        // Add lore with basic information
+        ItemMeta meta = titleItem.getItemMeta();
+        if (meta != null) {
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Target: " + ChatColor.YELLOW + getTargetMaterial().name());
+            meta.setLore(lore);
+            titleItem.setItemMeta(meta);
+        }
+        inv.setItem(4, titleItem);
+
+        // Basic stats items
+        inv.setItem(10, createStatItem(Material.IRON_PICKAXE, "Items Mined", stats.getItemsMined()));
+        inv.setItem(11, createStatItem(Material.IRON_SHOVEL, "Items Placed", stats.getItemsPlaced()));
+
+        // Display time saved based on tier delay
+        int delay = plugin.getUpgradeManager().getDelay(minionType, tier);
+        String timeSaved = stats.getFormattedTimeSaved(delay);
+        inv.setItem(12, createTextItem(Material.CLOCK, "Time Saved",
+                ChatColor.WHITE + timeSaved,
+                ChatColor.GRAY + "Based on tier delay: " + ChatColor.YELLOW + delay + "ms"));
+
+        // Display uptime
+        inv.setItem(13, createTextItem(Material.SUNFLOWER, "Uptime",
+                ChatColor.WHITE + stats.getFormattedUptime()));
+
+        // Specialized stats based on minion type
+        if (minionType == MinionType.BLOCK_MINER) {
+            // Fortune stats for miners
+            double fortunePercent = stats.getFortunePercentage();
+            inv.setItem(14, createTextItem(Material.DIAMOND, "Fortune Effect",
+                    ChatColor.WHITE + " " + stats.getFortuneProcs() + " (" + String.format("%.2f", fortunePercent) + "%)",
+                    ChatColor.GRAY + "Extra items from fortune"));
+        } else {
+            // Farming-specific stats
+            inv.setItem(14, createStatItem(Material.WHEAT, "Times Harvested", stats.getTimesHarvested()));
+
+            double doubleCropsPercent = stats.getDoubleCropsPercentage();
+            inv.setItem(15, createTextItem(Material.HAY_BLOCK, "Double Harvests",
+                    ChatColor.WHITE + " " + stats.getDoubleCropsProcs() + " (" + String.format("%.2f", doubleCropsPercent) + "%)",
+                    ChatColor.GRAY + "Extra crops from double harvest"));
+        }
+
+        // Add back button at the bottom
+        inv.setItem(26, createBackButton());
+
+        return inv;
+    }
+
+    private ItemStack createStatItem(Material material, String name, long value) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.GOLD + name);
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.WHITE + "" + value);  // Using empty string to force string concatenation
+            meta.setLore(lore);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private ItemStack createTextItem(Material material, String name, String... loreLines) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColor.GOLD + name);
+            if (loreLines.length > 0) {
+                List<String> lore = new ArrayList<>();
+                for (String line : loreLines) {
+                    lore.add(line);
+                }
+                meta.setLore(lore);
+            }
+            item.setItemMeta(meta);
+        }
+        return item;
     }
 }
