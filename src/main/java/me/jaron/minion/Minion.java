@@ -19,6 +19,8 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.block.data.Ageable;
 import me.jaron.minion.FarmerState;
 
+import java.util.Locale;
+
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -28,6 +30,12 @@ public class Minion {
     private final MinionPlugin plugin;
     private final ArmorStand minionArmorStand;
     private BukkitTask miningTask;
+
+    private boolean notifiedStorageFull = false;
+    private long lastNotificationTime = 0;
+    private static final long NOTIFICATION_COOLDOWN = 5 * 60 * 1000; // 5 minutes in milliseconds
+    private String string;
+
 
     public Minion(MinionPlugin plugin, ArmorStand minionArmorStand) {
         this.plugin = plugin;
@@ -54,56 +62,160 @@ public class Minion {
         return hopper;
     }
 
+    /**
+     * Creates and returns the minion action inventory with improved layout
+     */
     public Inventory getActionInventory() {
-        Inventory inv = Bukkit.createInventory(new MinionInventoryHolder(minionArmorStand.getUniqueId()), 9, "Minion Control Panel");
+        Inventory inv = Bukkit.createInventory(new MinionInventoryHolder(minionArmorStand.getUniqueId()), 36, "Minion Control Panel");
 
+        // Create border with black stained glass panes
+        ItemStack border = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
+        ItemMeta borderMeta = border.getItemMeta();
+        if (borderMeta != null) {
+            borderMeta.setDisplayName(" ");
+            border.setItemMeta(borderMeta);
+        }
+
+        // Add border around the edges
+        for (int i : new int[]{0,1,2,3,4,5,6,7,8,9,17,18,26,27,28,29,30,32,33,34,35}) {
+            inv.setItem(i, border);
+        }
+
+        // Get minion information
         String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
         MinionType minionType = MinionType.valueOf(minionTypeStr);
         int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
 
-        ItemStack typeItem;
-        if (minionType == MinionType.BLOCK_MINER) {
-            typeItem = createItem(Material.DIAMOND_PICKAXE, ChatColor.GOLD + "Block Miner " + ChatColor.WHITE + "[Tier " + tier + "]");
-        } else {
-            typeItem = createItem(Material.DIAMOND_HOE, ChatColor.GOLD + "Farmer " + ChatColor.WHITE + "[Tier " + tier + "]");
+        // Minion type toggle button (slot 10)
+        ItemStack typeToggle = new ItemStack(minionType == MinionType.BLOCK_MINER ? Material.DIAMOND_PICKAXE : Material.DIAMOND_HOE);
+        ItemMeta typeMeta = typeToggle.getItemMeta();
+        if (typeMeta != null) {
+            typeMeta.setDisplayName(ChatColor.BLUE + "Toggle Type: " + ChatColor.YELLOW + minionType.name());
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Current: " + ChatColor.GOLD + minionType.name());
+            lore.add(ChatColor.GRAY + "Click to toggle to " +
+                    (minionType == MinionType.BLOCK_MINER ? ChatColor.GREEN + "FARMER" : ChatColor.GREEN + "BLOCK_MINER"));
+            typeMeta.setLore(lore);
+            typeToggle.setItemMeta(typeMeta);
         }
+        inv.setItem(10, typeToggle);
 
-        inv.setItem(0, typeItem);
+        // Minion inventory button (slot 13)
+        ItemStack storage = new ItemStack(Material.CHEST);
+        ItemMeta storageMeta = storage.getItemMeta();
+        if (storageMeta != null) {
+            storageMeta.setDisplayName(ChatColor.GOLD + "Open Minion Storage");
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Click to view collected items");
+            storageMeta.setLore(lore);
+            storage.setItemMeta(storageMeta);
+        }
+        inv.setItem(13, storage);
+
+        // Target selection button (slot 16)
+        String targetStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.targetKey, PersistentDataType.STRING, "");
+        Material targetMaterial = targetStr.isEmpty() ? null : Material.getMaterial(targetStr);
+
+        ItemStack targetItem;
+        if (targetMaterial != null) {
+            targetItem = new ItemStack(targetMaterial);
+            ItemMeta targetMeta = targetItem.getItemMeta();
+            if (targetMeta != null) {
+                targetMeta.setDisplayName(ChatColor.AQUA + "Target: " + ChatColor.YELLOW + targetMaterial.name());
+                targetMeta.setLore(List.of(ChatColor.GRAY + "Click to change target"));
+                targetItem.setItemMeta(targetMeta);
+            }
+        } else {
+            targetItem = new ItemStack(Material.DIAMOND_PICKAXE);
+            ItemMeta targetMeta = targetItem.getItemMeta();
+            if (targetMeta != null) {
+                targetMeta.setDisplayName(ChatColor.YELLOW + "Set Target");
+                targetMeta.setLore(List.of(ChatColor.GRAY + "Click to set target block"));
+                targetItem.setItemMeta(targetMeta);
+            }
+        }
+        inv.setItem(16, targetItem);
+
+        // Stats button (slot 19)
+        ItemStack stats = new ItemStack(Material.PAPER);
+        ItemMeta statsMeta = stats.getItemMeta();
+        if (statsMeta != null) {
+            statsMeta.setDisplayName(ChatColor.GREEN + "View Stats");
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Click to view minion statistics");
+            statsMeta.setLore(lore);
+            stats.setItemMeta(statsMeta);
+        }
+        inv.setItem(19, stats);
+
+        // Upgrade button (slot 25)
+        ItemStack upgrade = new ItemStack(Material.EXPERIENCE_BOTTLE);
+        ItemMeta upgradeMeta = upgrade.getItemMeta();
+        if (upgradeMeta != null) {
+            upgradeMeta.setDisplayName(ChatColor.GREEN + "Upgrade Minion");
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Current Tier: " + ChatColor.GOLD + tier);
+            int maxTier = plugin.getUpgradeManager().getMaxTier();
+            if (tier < maxTier) {
+                lore.add(ChatColor.YELLOW + "Click to upgrade to Tier " + (tier + 1));
+            } else {
+                lore.add(ChatColor.RED + "Maximum tier reached");
+            }
+            upgradeMeta.setLore(lore);
+            upgrade.setItemMeta(upgradeMeta);
+        }
+        inv.setItem(25, upgrade);
+
+        // Back button (slot 31)
+        ItemStack back = new ItemStack(Material.RED_STAINED_GLASS_PANE);
+        ItemMeta backMeta = back.getItemMeta();
+        if (backMeta != null) {
+            backMeta.setDisplayName(ChatColor.RED + "Close");
+            backMeta.setLore(List.of(ChatColor.GRAY + "Click to close this menu"));
+            back.setItemMeta(backMeta);
+        }
+        inv.setItem(31, back);
+
+        // Additional button: Remove minion (slot 22)
+        ItemStack remove = new ItemStack(Material.BARRIER);
+        ItemMeta removeMeta = remove.getItemMeta();
+        if (removeMeta != null) {
+            removeMeta.setDisplayName(ChatColor.RED + "Remove Minion");
+            removeMeta.setLore(List.of(ChatColor.GRAY + "Click to remove this minion"));
+            remove.setItemMeta(removeMeta);
+        }
+        inv.setItem(22, remove);
+
+        if (bundleAlert) {
+            ItemStack alertItem = new ItemStack(Material.RED_BANNER);
+            ItemMeta alertMeta = alertItem.getItemMeta();
+            if (alertMeta != null) {
+                alertMeta.setDisplayName(ChatColor.RED + "⚠ Bundle Alert ⚠");
+                List<String> lore = new ArrayList<>();
+                lore.add(ChatColor.YELLOW + "A minion in this bundle");
+                lore.add(ChatColor.YELLOW + "has full storage!");
+                alertMeta.setLore(lore);
+                alertItem.setItemMeta(alertMeta);
+            }
+            inv.setItem(20, alertItem);  // Place in a visible slot
+        }
 
         if (minionType == MinionType.FARMER) {
-            boolean wantsSeeds = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1) == 1;
-            ItemStack seedsToggle = createItem(Material.WHEAT_SEEDS, ChatColor.GOLD + "Collect Seeds: " + (wantsSeeds ? "On" : "Off"));
-            inv.setItem(1, seedsToggle);
-        }
-
-        String targetName = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.COBBLESTONE.name());
-        Material targetMaterial;
-        try {
-            targetMaterial = Material.valueOf(targetName);
-            // Convert seed materials to their crop display versions
-            if (targetMaterial == Material.BEETROOT_SEEDS) {
-                targetMaterial = Material.BEETROOT;
-            } else if (targetMaterial == Material.WHEAT_SEEDS) {
-                targetMaterial = Material.WHEAT;
+            byte wantsSeeds = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1);
+            ItemStack seedsToggle = new ItemStack(Material.WHEAT_SEEDS);
+            ItemMeta seedsMeta = seedsToggle.getItemMeta();
+            if (seedsMeta != null) {
+                seedsMeta.setDisplayName(ChatColor.GOLD + "Toggle Seed Replanting: " +
+                        (wantsSeeds == 1 ? ChatColor.GREEN + "ON" : ChatColor.RED + "OFF"));
+                List<String> lore = new ArrayList<>();
+                lore.add(ChatColor.GRAY + "Current: " + (wantsSeeds == 1 ? ChatColor.GREEN + "ON" : ChatColor.RED + "OFF"));
+                lore.add(ChatColor.GRAY + "Click to toggle");
+                seedsMeta.setLore(lore);
+                seedsToggle.setItemMeta(seedsMeta);
             }
-        } catch (IllegalArgumentException e) {
-            targetMaterial = Material.COBBLESTONE;
+            inv.setItem(11, seedsToggle);
         }
 
-        ItemStack selector = createItem(targetMaterial, ChatColor.AQUA + "Target: " + targetName);
-        ItemStack storage = createItem(Material.CHEST, ChatColor.BLUE + "Open Minion Storage");
-        ItemStack stats = createItem(Material.BOOK, ChatColor.GREEN + "View Minion Statistics");
-
-        // Use the dynamic max tier from the upgrade manager instead of hardcoded value
-        int maxTier = plugin.getUpgradeManager().getMaxTier();
-        ItemStack upgrade = createItem(Material.EXPERIENCE_BOTTLE, ChatColor.GREEN + "Upgrade Minion" +
-                                     (tier < maxTier ? "" : ChatColor.RED + " (Max Tier)"));
-
-        inv.setItem(2, stats);
-        inv.setItem(3, storage);
-        inv.setItem(4, selector);
-        inv.setItem(6, upgrade);
-        inv.setItem(8, createBackButton());
         return inv;
     }
 
@@ -132,6 +244,99 @@ public class Minion {
         }
         return item;
     }
+
+
+    private void sendStorageFullNotification(Player owner) {
+        long currentTime = System.currentTimeMillis();
+
+        // Check if we're on cooldown for notifications
+        if (!notifiedStorageFull || (currentTime - lastNotificationTime) > NOTIFICATION_COOLDOWN) {
+            // Update notification tracking
+            notifiedStorageFull = true;
+            lastNotificationTime = currentTime;
+
+            // Send notification to player if online
+            if (owner != null && owner.isOnline()) {
+                // Title notification (appears in center of screen)
+                owner.sendTitle(
+                        ChatColor.RED + "Storage Full!",
+                        ChatColor.YELLOW + "Your " + getMinionTypeName() + " minion needs attention",
+                        10, 70, 20
+                );
+
+                // Chat message with location info
+                Location loc = minionArmorStand.getLocation();
+                String locationInfo = String.format("(x:%d, y:%d, z:%d)",
+                        loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+
+                owner.sendMessage(ChatColor.RED + "[Minion Alert] " +
+                        ChatColor.YELLOW + "Your " + getMinionTypeName() +
+                        " minion's storage is full! " + ChatColor.GRAY + locationInfo);
+
+                // Play sound
+                owner.playSound(owner.getLocation(),
+                        org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 0.5f);
+            }
+
+            // Notify minion bundle if enabled
+            notifyMinionBundle(owner);
+        }
+    }
+    private void resetStorageFullNotification() {
+        notifiedStorageFull = false;
+    }
+    private String getMinionTypeName() {
+        String minionTypeStr = minionArmorStand.getPersistentDataContainer()
+                .getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+
+
+        return Arrays.stream(minionTypeStr.replace("_", " ").toLowerCase().split(" "))
+                .map(word -> word.substring(0, 1).toUpperCase() + word.substring(1))
+                .reduce((a, b) -> a + " " + b).orElse(minionTypeStr);
+    }
+    private void notifyMinionBundle(Player owner) {
+        // Get the bundle ID this minion belongs to (if any)
+        String bundleId = minionArmorStand.getPersistentDataContainer()
+                .getOrDefault(plugin.minionBundleKey, PersistentDataType.STRING, "");
+
+        if (bundleId.isEmpty()) return;
+
+        // Find all other minions in the same bundle and update their status
+        for (Minion otherMinion : plugin.getActiveMinions()) {
+            if (otherMinion.getUUID().equals(this.getUUID())) continue; // Skip self
+
+            String otherBundleId = otherMinion.getBundleId();
+            if (bundleId.equals(otherBundleId)) {
+                // Update bundle member status
+                otherMinion.setBundleAlert(true);
+
+                // If owner is viewing any bundle member's inventory, refresh it
+                for (Player player : Bukkit.getOnlinePlayers()) {
+                    if (player.getOpenInventory().getTopInventory().getHolder() instanceof MinionInventoryHolder) {
+                        MinionInventoryHolder holder = (MinionInventoryHolder)
+                                player.getOpenInventory().getTopInventory().getHolder();
+
+                        if (holder.getMinionUUID().equals(otherMinion.getUUID())) {
+                            player.openInventory(otherMinion.getActionInventory());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    public String getBundleId() {
+        return minionArmorStand.getPersistentDataContainer()
+                .getOrDefault(plugin.minionBundleKey, PersistentDataType.STRING, "");
+    }
+    private boolean bundleAlert = false;
+
+    public void setBundleAlert(boolean alert) {
+        this.bundleAlert = alert;
+    }
+
+
+
 
     // Mine single cell
     public void mineBlock() {
@@ -229,11 +434,30 @@ public class Minion {
             boolean storageSystemFull = isStorageFull(mat, storage, chestInv);
             if (storageSystemFull) {
                 setMinionCustomName(ChatColor.RED + "Storage Full!");
-            } else if (block.getType() != mat && block.getType() != Material.AIR) {
-                setMinionCustomName(ChatColor.RED + "Occupied: " + block.getType());
+
+                // Get the owner of this minion
+                UUID ownerUUID = minionArmorStand.getPersistentDataContainer()
+                        .getOrDefault(plugin.ownerKey, PersistentDataType.STRING, "")
+                        .isEmpty() ? null : UUID.fromString(minionArmorStand.getPersistentDataContainer()
+                        .get(plugin.ownerKey, PersistentDataType.STRING));
+
+                if (ownerUUID != null) {
+                    Player owner = Bukkit.getPlayer(ownerUUID);
+                    sendStorageFullNotification(owner);
+                }
+
             } else {
-                setMinionCustomName(ChatColor.RED + "Need " + mat.name());
+                resetStorageFullNotification();
+                if (block.getType() != mat && block.getType() != Material.AIR) {
+                    setMinionCustomName(ChatColor.RED + "Occupied: " + block.getType());
+                } else {
+                    setMinionCustomName(ChatColor.RED + "Need " + mat.name());
+                }
             }
+        }
+        else {
+            // Reset notification when minion successfully did something
+            resetStorageFullNotification();
         }
 
         minionArmorStand.setCustomNameVisible(true);
@@ -747,13 +971,23 @@ public class Minion {
 
     public static class MinionInventoryHolder implements InventoryHolder {
         private final UUID minionUUID;
+        private final String inventoryType;
 
         public MinionInventoryHolder(UUID minionUUID) {
+            this(minionUUID, "control");
+        }
+
+        public MinionInventoryHolder(UUID minionUUID, String inventoryType) {
             this.minionUUID = minionUUID;
+            this.inventoryType = inventoryType;
         }
 
         public UUID getMinionUUID() {
             return minionUUID;
+        }
+
+        public String getInventoryType() {
+            return inventoryType;
         }
 
         @Override
@@ -763,25 +997,35 @@ public class Minion {
     }
 
     public Inventory getStatsInventory() {
-        Inventory inv = Bukkit.createInventory(new MinionInventoryHolder(minionArmorStand.getUniqueId()), 27, "Minion Statistics");
+        Inventory inv = Bukkit.createInventory(new MinionInventoryHolder(minionArmorStand.getUniqueId(), "stats"), 27, "Minion Statistics");
 
         // Get minion stats
         MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
 
-        // Get minion info
+
         String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
         MinionType minionType = MinionType.valueOf(minionTypeStr);
         int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
 
-        // Create title item
-        ItemStack titleItem;
-        if (minionType == MinionType.BLOCK_MINER) {
-            titleItem = createItem(Material.DIAMOND_PICKAXE, ChatColor.GOLD + "Block Miner Statistics " + ChatColor.WHITE + "[Tier " + tier + "]");
-        } else {
-            titleItem = createItem(Material.DIAMOND_HOE, ChatColor.GOLD + "Farmer Statistics " + ChatColor.WHITE + "[Tier " + tier + "]");
+
+        ItemStack border = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
+        ItemMeta borderMeta = border.getItemMeta();
+        if (borderMeta != null) {
+            borderMeta.setDisplayName(" ");
+            border.setItemMeta(borderMeta);
         }
 
-        // Add lore with basic information
+        for (int i = 0; i < 27; i++) {
+            if (i < 9 || i > 17 || i % 9 == 0 || i % 9 == 8) {
+                inv.setItem(i, border);
+            }
+        }
+
+        ItemStack titleItem = createItem(Material.DIAMOND_HOE, ChatColor.GOLD +
+                (minionType == MinionType.BLOCK_MINER ? "Block Miner" : "Farmer") +
+                " Statistics " + ChatColor.WHITE + "[Tier " + tier + "]");
+
+
         ItemMeta meta = titleItem.getItemMeta();
         if (meta != null) {
             List<String> lore = new ArrayList<>();
@@ -791,30 +1035,25 @@ public class Minion {
         }
         inv.setItem(4, titleItem);
 
-        // Basic stats items
         inv.setItem(10, createStatItem(Material.IRON_PICKAXE, "Items Mined", stats.getItemsMined()));
         inv.setItem(11, createStatItem(Material.IRON_SHOVEL, "Items Placed", stats.getItemsPlaced()));
 
-        // Display time saved based on tier delay
         int delay = plugin.getUpgradeManager().getDelay(minionType, tier);
         String timeSaved = stats.getFormattedTimeSaved(delay);
         inv.setItem(12, createTextItem(Material.CLOCK, "Time Saved",
                 ChatColor.WHITE + timeSaved,
                 ChatColor.GRAY + "Based on tier delay: " + ChatColor.YELLOW + delay + "ms"));
 
-        // Display uptime
         inv.setItem(13, createTextItem(Material.SUNFLOWER, "Uptime",
                 ChatColor.WHITE + stats.getFormattedUptime()));
 
-        // Specialized stats based on minion type
+
         if (minionType == MinionType.BLOCK_MINER) {
-            // Fortune stats for miners
             double fortunePercent = stats.getFortunePercentage();
             inv.setItem(14, createTextItem(Material.DIAMOND, "Fortune Effect",
                     ChatColor.WHITE + " " + stats.getFortuneProcs() + " (" + String.format("%.2f", fortunePercent) + "%)",
                     ChatColor.GRAY + "Extra items from fortune"));
         } else {
-            // Farming-specific stats
             inv.setItem(14, createStatItem(Material.WHEAT, "Times Harvested", stats.getTimesHarvested()));
 
             double doubleCropsPercent = stats.getDoubleCropsPercentage();
@@ -823,8 +1062,14 @@ public class Minion {
                     ChatColor.GRAY + "Extra crops from double harvest"));
         }
 
-        // Add back button at the bottom
-        inv.setItem(26, createBackButton());
+        ItemStack backButton = new ItemStack(Material.RED_STAINED_GLASS_PANE);
+        ItemMeta backMeta = backButton.getItemMeta();
+        if (backMeta != null) {
+            backMeta.setDisplayName(ChatColor.RED + "Back");
+            backMeta.setLore(List.of(ChatColor.GRAY + "Return to control panel"));
+            backButton.setItemMeta(backMeta);
+        }
+        inv.setItem(22, backButton);
 
         return inv;
     }

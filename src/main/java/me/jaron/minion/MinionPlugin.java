@@ -16,16 +16,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.ConfigurationSection;
 
-import java.util.Map;
-import java.util.Objects;
-import java.util.HashMap;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.UUID;
+import java.util.*;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.World;
 
@@ -43,6 +37,7 @@ public class MinionPlugin extends JavaPlugin {
     public final NamespacedKey farmerStateKey = new NamespacedKey(this, "farmer_state");
     public final NamespacedKey lastActionTimeKey = new NamespacedKey(this, "last_action_time");
     public final NamespacedKey statsKey = new NamespacedKey(this, "minion_stats");
+    public final NamespacedKey minionBundleKey = new NamespacedKey(this, "minion_bundle");
 
     private static MinionPlugin instance;
 
@@ -51,6 +46,7 @@ public class MinionPlugin extends JavaPlugin {
     private final Map<UUID, List<Minion>> minions = new HashMap<>();
     private MinionBundleManager bundleManager;
     private MinionUpgradeManager upgradeManager;
+    private final Map<UUID, Minion> activeMinions = new HashMap<>();
 
     private final Map<UUID, MinionStats> minionStats = new HashMap<>();
 
@@ -61,6 +57,19 @@ public class MinionPlugin extends JavaPlugin {
     // Add getter for the upgrade manager
     public MinionUpgradeManager getUpgradeManager() {
         return upgradeManager;
+    }
+
+
+    public void registerMinion(Minion minion) {
+        activeMinions.put(minion.getUUID(), minion);
+    }
+
+    public void unregisterMinion(UUID minionUUID) {
+        activeMinions.remove(minionUUID);
+    }
+
+    public Collection<Minion> getActiveMinions() {
+        return activeMinions.values();
     }
 
     public Inventory getMinionStorage(UUID uuid) {

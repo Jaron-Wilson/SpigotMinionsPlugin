@@ -36,14 +36,28 @@ public class InventoryClick implements Listener {
 
         event.setCancelled(true);
 
-        // IMPORTANT FIX: Check if the clicked inventory is the player's inventory
-        // If it's the player's inventory (hotbar, etc.), just cancel the event and return
+
+        if ("stats".equals(holder.getInventoryType())) {
+            // Only handle back button click for stats inventory
+            if (event.getSlot() == 22) {
+                UUID minionUUID = holder.getMinionUUID();
+                Entity entity = Bukkit.getServer().getEntity(minionUUID);
+                if (entity instanceof ArmorStand armorStand) {
+                    Minion minion = new Minion(plugin, armorStand);
+                    player.openInventory(minion.getActionInventory());
+                }
+            }
+            return; // Exit early for stats inventory clicks
+        }
+
+
         if (event.getClickedInventory() != event.getView().getTopInventory()) {
             return;
         }
 
         ItemStack clickedItem = event.getCurrentItem();
         if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+
 
         UUID minionUUID = holder.getMinionUUID();
         Entity entity = Bukkit.getServer().getEntity(minionUUID);
@@ -56,44 +70,38 @@ public class InventoryClick implements Listener {
         String minionTypeStr = armorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
         MinionType minionType = MinionType.valueOf(minionTypeStr);
 
-        if (event.getSlot() == 0) { // Toggle Minion Type
+        // Handle clicks based on new slot layout
+        if (event.getSlot() == 10) { // Toggle Minion Type
             MinionType currentType = MinionType.valueOf(minionTypeStr);
             MinionType newType = currentType == MinionType.BLOCK_MINER ? MinionType.FARMER : MinionType.BLOCK_MINER;
             openTypeConfirmationGUI(player, minionUUID, newType);
-        } else if (event.getSlot() == 1 && minionType == MinionType.FARMER) {
+        } else if (event.getSlot() == 11 && minionType == MinionType.FARMER) { // Toggle Seeds (only for farmer)
             byte wantsSeeds = armorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1);
             armorStand.getPersistentDataContainer().set(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)(wantsSeeds == 1 ? 0 : 1));
             player.openInventory(minion.getActionInventory());
-        } else if (event.getSlot() == 2) { // View Stats
-            // Open the stats inventory
+        } else if (event.getSlot() == 19) { // View Stats
             player.openInventory(minion.getStatsInventory());
-        } else if (clickedItem.getType() == Material.CHEST) {
+        } else if (event.getSlot() == 13) { // Open Storage
             player.openInventory(minion.getMinionStorage());
-        } else if (clickedItem.getType() == Material.BARRIER) {
+        } else if (event.getSlot() == 31) { // Close menu
             player.closeInventory();
-        } else if (event.getSlot() == 5) { // Remove Minion
+        } else if (event.getSlot() == 22) { // Remove Minion
             openRemovalConfirmationGUI(player, minionUUID);
-        } else if (event.getSlot() == 6) { // Upgrade Minion
-            // Handle upgrade button
+        } else if (event.getSlot() == 25) { // Upgrade Minion
             int currentTier = armorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
-            // Use the dynamic max tier from the upgrade manager instead of hardcoded value
             int maxTier = plugin.getUpgradeManager().getMaxTier();
             if (currentTier < maxTier) {
                 int targetTier = currentTier + 1;
-
-                // Check if upgrade path exists
                 Map<String, Integer> upgradeCosts = plugin.getUpgradeManager().getUpgradeCost(targetTier);
                 if (upgradeCosts.isEmpty()) {
                     player.sendMessage(ChatColor.RED + "No upgrade path defined for tier " + targetTier);
                     return;
                 }
-
-                // Show the upgrade confirmation GUI instead of auto-upgrading
                 openUpgradeConfirmationGUI(player, minionUUID, targetTier);
             } else {
                 player.sendMessage(ChatColor.RED + "This minion is already at maximum tier!");
             }
-        } else if (event.getSlot() == 7) { // Target selection
+        } else if (event.getSlot() == 16) { // Target selection
             if (minionType == MinionType.FARMER) {
                 player.openInventory(getFarmerTargetSelectGUI(minionUUID));
             } else {
@@ -452,7 +460,7 @@ public class InventoryClick implements Listener {
              event.getInventory().getHolder() instanceof MinionBundleManager.CategoryConfirmationHolder ||
              event.getInventory().getHolder() instanceof MinionBundleManager.PartialDeletionHolder)) {
             event.setCancelled(true);
-            return; // Exit early - don't process hotbar clicks
+            return;
         }
 
         // Cancel any click in a minion inventory or storage
