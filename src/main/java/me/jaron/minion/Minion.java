@@ -43,7 +43,7 @@ public class Minion {
     }
 
     public static ItemStack createBackButton() {
-        ItemStack barrier = new ItemStack(Material.BARRIER);
+        ItemStack barrier = new ItemStack(Material.RED_STAINED_GLASS_PANE);
         ItemMeta meta = barrier.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(ChatColor.RED + "Back");
@@ -68,7 +68,7 @@ public class Minion {
     public Inventory getActionInventory() {
         Inventory inv = Bukkit.createInventory(new MinionInventoryHolder(minionArmorStand.getUniqueId()), 36, "Minion Control Panel");
 
-        // Create border with black stained glass panes
+        // create border with black stained-glass panes
         ItemStack border = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
         ItemMeta borderMeta = border.getItemMeta();
         if (borderMeta != null) {
@@ -556,8 +556,11 @@ public class Minion {
 
     private void processFarmerCell(int idx) {
         World world = minionArmorStand.getWorld();
-        var pdc = minionArmorStand.getPersistentDataContainer();
-        String stateStr = pdc.getOrDefault(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HARVESTING.name());
+        Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
+        Inventory chestInv = checkForChest(world, minionArmorStand.getLocation());
+
+        var persistentDataContainer = minionArmorStand.getPersistentDataContainer();
+        String stateStr = persistentDataContainer.getOrDefault(plugin.farmerStateKey, PersistentDataType.STRING, FarmerState.HARVESTING.name());
         FarmerState currentState;
         try {
             currentState = FarmerState.valueOf(stateStr);
@@ -565,7 +568,7 @@ public class Minion {
             currentState = FarmerState.HARVESTING; // Default state
         }
 
-        String targetStr = pdc.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT.name());
+        String targetStr = persistentDataContainer.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT.name());
         Material targetCrop;
         try {
             targetCrop = Material.valueOf(targetStr);
@@ -583,7 +586,7 @@ public class Minion {
         Block cropBlock = soilBlock.getRelative(0, 1, 0);
 
         // Get tier and bonemeal chance from config
-        int tier = pdc.getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
+        int tier = persistentDataContainer.getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
         double boneMealChance = plugin.getUpgradeManager().getBoneMealChance(tier);
 
         switch (currentState) {
@@ -605,6 +608,26 @@ public class Minion {
                 }
                 break;
             case HARVESTING:
+                // Check storage fullness first
+                Material cropProduct = getHarvestedProduct(targetCrop);
+                boolean storageSystemFull = isStorageFull(cropProduct, storage, chestInv);
+
+                if (storageSystemFull) {
+                    setMinionCustomName(ChatColor.RED + "Storage Full!");
+
+                    // Get the owner of this minion
+                    UUID ownerUUID = minionArmorStand.getPersistentDataContainer()
+                            .getOrDefault(plugin.ownerKey, PersistentDataType.STRING, "")
+                            .isEmpty() ? null : UUID.fromString(minionArmorStand.getPersistentDataContainer()
+                            .get(plugin.ownerKey, PersistentDataType.STRING));
+
+                    if (ownerUUID != null) {
+                        Player owner = Bukkit.getPlayer(ownerUUID);
+                        sendStorageFullNotification(owner);
+                    }
+                    break; // Skip harvesting when storage is full
+                }
+
                 // Harvest logic
                 Material plantableCrop = getPlantableCrop(targetCrop);
                 if (cropBlock.getType() == plantableCrop && cropBlock.getBlockData() instanceof Ageable ageable) {
@@ -643,6 +666,17 @@ public class Minion {
                 break;
         }
         minionArmorStand.setCustomNameVisible(true);
+    }
+
+    private Material getHarvestedProduct(Material crop) {
+        return switch (crop) {
+            case WHEAT, WHEAT_SEEDS -> Material.WHEAT;
+            case CARROTS, CARROT -> Material.CARROT;
+            case POTATOES, POTATO -> Material.POTATO;
+            case BEETROOTS, BEETROOT, BEETROOT_SEEDS -> Material.BEETROOT;
+            case NETHER_WART -> Material.NETHER_WART;
+            default -> crop;
+        };
     }
 
     private void checkFarmerStateTransition() {
