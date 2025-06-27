@@ -18,6 +18,8 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.block.data.Ageable;
 import me.jaron.minion.FarmerState;
+import org.bukkit.util.EulerAngle;
+import org.bukkit.util.Vector;
 
 import java.util.Locale;
 
@@ -396,6 +398,8 @@ public class Minion {
         Block block = world.getBlockAt(loc.getBlockX() + (idx%3)-1,
             loc.getBlockY()-1, loc.getBlockZ() + (idx/3)-1);
 
+        lookAtBlock(block);
+
         Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
         if (storage == null) return;
 
@@ -459,6 +463,7 @@ public class Minion {
             // Reset notification when minion successfully did something
             resetStorageFullNotification();
         }
+        Bukkit.getScheduler().runTaskLater(plugin, this::resetLook, 20L); // 1 second later
 
         minionArmorStand.setCustomNameVisible(true);
     }
@@ -523,6 +528,7 @@ public class Minion {
 
             // Get hologram_message from config
             String hologramMessage = plugin.getUpgradeManager().getHologramMessage(minionTypeLower, tier);
+            resetLook();
 
             // Random chance to show hologram_message (20% chance) or display_name (80% chance)
             if (displayName != null && !displayName.isEmpty()) {
@@ -595,7 +601,10 @@ public class Minion {
                     if (soilBlock.getType() == Material.DIRT || soilBlock.getType() == Material.GRASS_BLOCK) {
                         soilBlock.setType(Material.FARMLAND);
                         setMinionCustomName(ChatColor.GREEN + "Hoeing...");
-                        minionArmorStand.swingMainHand();
+                        minionArmorStand.setRightArmPose(new EulerAngle(Math.toRadians(280), 0, 0));
+                        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                            minionArmorStand.setRightArmPose(new EulerAngle(0, 0, 0));
+                        }, 10L);
                     }
                 }
                 break;
@@ -727,7 +736,12 @@ public class Minion {
 
     private void harvestAndReplant(Block block, Material targetCrop) {
         setMinionCustomName(ChatColor.GREEN + "Harvesting");
-        minionArmorStand.swingMainHand();
+        minionArmorStand.setRightArmPose(new EulerAngle(Math.toRadians(280), 0, 0));
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            minionArmorStand.setRightArmPose(new EulerAngle(0, 0, 0));
+        }, 10L);
+
+        lookAtBlock(block);
 
         World world = block.getWorld();
         Inventory storage = plugin.getMinionStorage(minionArmorStand.getUniqueId());
@@ -783,6 +797,7 @@ public class Minion {
                 addToStorage(drop, storage, chestInv, world, block.getLocation());
             }
         }
+        Bukkit.getScheduler().runTaskLater(plugin, this::resetLook, 20L); // 1 second later
     }
 
     private void tryPlanting(Block block, Material targetCrop) {
@@ -858,6 +873,7 @@ public class Minion {
 
     private boolean plantBlock(Block block, Material mat) {
         setMinionCustomName(ChatColor.GREEN + "Planting");
+        lookAtBlock(block);
         block.setType(mat);
 
         // Track planting statistics
@@ -887,7 +903,13 @@ public class Minion {
         if (storage == null) return false;
 
         setMinionCustomName(ChatColor.GOLD + "Mining");
-        minionArmorStand.swingMainHand();
+        minionArmorStand.setRightArmPose(new EulerAngle(Math.toRadians(280), 0, 0));
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            minionArmorStand.setRightArmPose(new EulerAngle(0, 0, 0));
+        }, 10L);
+
+
+        lookAtBlock(block);
 
         // Get tier for fortune ability
         int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
@@ -922,6 +944,7 @@ public class Minion {
         }
 
         block.setType(Material.AIR);
+        Bukkit.getScheduler().runTaskLater(plugin, this::resetLook, 20L); // 1 second later
         return true;
 
     }
@@ -1136,5 +1159,27 @@ public class Minion {
             item.setItemMeta(meta);
         }
         return item;
+    }
+
+    private void lookAtBlock(Block targetBlock) {
+        if (minionArmorStand == null || targetBlock == null) return;
+
+        Vector direction = targetBlock.getLocation().add(0.5, 0.5, 0.5)
+                .subtract(minionArmorStand.getEyeLocation()).toVector();
+
+        double pitch = -1 * Math.atan2(direction.getY(),
+                Math.sqrt(direction.getX() * direction.getX() + direction.getZ() * direction.getZ()));
+
+        float yaw = (float) Math.toDegrees(Math.atan2(direction.getZ(), direction.getX())) - 90;
+        minionArmorStand.setRotation(yaw, 0);
+
+        minionArmorStand.setHeadPose(new EulerAngle(pitch, 0, 0));
+    }
+
+    public void resetLook() {
+        ArmorStand stand = minionArmorStand;
+        if (stand != null) {
+            stand.setHeadPose(new EulerAngle(0, 0, 0));
+        }
     }
 }

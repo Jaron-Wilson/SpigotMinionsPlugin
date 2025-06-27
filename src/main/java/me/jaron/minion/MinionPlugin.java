@@ -42,7 +42,7 @@ public class MinionPlugin extends JavaPlugin {
     private static MinionPlugin instance;
 
     private final Set<UUID> automationPlayers = new HashSet<>();
-    private final Map<UUID, Inventory> minionInventories = new HashMap<>();
+    private static final Map<UUID, Inventory> minionInventories = new HashMap<>();
     private final Map<UUID, List<Minion>> minions = new HashMap<>();
     private MinionBundleManager bundleManager;
     private MinionUpgradeManager upgradeManager;
@@ -88,7 +88,7 @@ public class MinionPlugin extends JavaPlugin {
         minionInventories.put(minionUUID, inventory);
     }
 
-    public class StorageHolder implements InventoryHolder {
+    public static class StorageHolder implements InventoryHolder {
         private final UUID uuid;
         public StorageHolder(UUID uuid) { this.uuid = uuid; }
         public UUID getMinionUUID() { return uuid; }
@@ -141,7 +141,9 @@ public class MinionPlugin extends JavaPlugin {
             as.setSmall(true);
             as.setGravity(false);
             as.setInvulnerable(true);
+
             as.setArms(true);
+            as.getEquipment().setItemInMainHand(new ItemStack(Material.WOODEN_PICKAXE));
 
             as.setCustomNameVisible(true);
 
@@ -164,13 +166,16 @@ public class MinionPlugin extends JavaPlugin {
             Minion minion = new Minion(this, as);
             minions.computeIfAbsent(owner.getUniqueId(), k -> new ArrayList<>()).add(minion);
 
+            // Register the new minion in activeMinions map
+            registerMinion(minion);
+
             // auto-start if owner has automation active
             if (automationPlayers.contains(owner.getUniqueId())) {
-                new Minion(this, as).startAutomation();
+                minion.startAutomation();
             }
         });
 
-        owner.sendMessage(ChatColor.GREEN + "A new CobbleMinion has been spawned!");
+        owner.sendMessage(ChatColor.GREEN + "A new Minion has been spawned!");
     }
 
     /** Called by MinionAutomationCommand */
@@ -184,7 +189,12 @@ public class MinionPlugin extends JavaPlugin {
 
     public void removeMinion(Player owner, ArmorStand armorStand) {
         UUID ownerUUID = owner.getUniqueId();
-        minionInventories.remove(armorStand.getUniqueId());
+        UUID minionUUID = armorStand.getUniqueId();
+
+        // Unregister from active minions
+        unregisterMinion(minionUUID);
+
+        minionInventories.remove(minionUUID);
 
         List<Minion> playerMinions = minions.get(ownerUUID);
         if (playerMinions != null) {
@@ -196,6 +206,11 @@ public class MinionPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // Stop all minion tasks before saving
+        for (Minion minion : getActiveMinions()) {
+            minion.stopAutomation();
+        }
+
         // Save all data before plugin is disabled
         saveAllData();
 
@@ -352,6 +367,8 @@ public class MinionPlugin extends JavaPlugin {
 
     private void loadMinions() {
         minions.clear();
+        activeMinions.clear(); // Clear active minions before reloading
+
         for (World world : Bukkit.getWorlds()) {
             for (Entity entity : world.getEntities()) {
                 if (entity instanceof ArmorStand as) {
@@ -362,6 +379,10 @@ public class MinionPlugin extends JavaPlugin {
                                 UUID ownerUUID = UUID.fromString(ownerUUIDString);
                                 Minion minion = new Minion(this, as);
                                 minions.computeIfAbsent(ownerUUID, k -> new ArrayList<>()).add(minion);
+
+                                // Register minion in activeMinions map
+                                registerMinion(minion);
+
                             } catch (IllegalArgumentException e) {
                                 getLogger().warning("Invalid owner UUID on minion: " + ownerUUIDString);
                             }
@@ -370,6 +391,8 @@ public class MinionPlugin extends JavaPlugin {
                 }
             }
         }
+
+        getLogger().info("Loaded " + activeMinions.size() + " active minions");
     }
 
     public void setupMinionStorageUI(Inventory inv) {

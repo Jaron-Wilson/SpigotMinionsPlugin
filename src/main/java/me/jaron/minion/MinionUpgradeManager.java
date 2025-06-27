@@ -17,6 +17,7 @@ public class MinionUpgradeManager {
     private final Map<String, Map<Integer, Map<String, Object>>> tierSettings = new HashMap<>();
     private final Map<Integer, Map<String, Integer>> upgradeCosts = new HashMap<>();
     private final Set<Integer> availableTiers = new HashSet<>();
+    private final Map<Integer, Integer> tierStorageSizes = new HashMap<>();
     private int maxTier = 5;
 
     public MinionUpgradeManager(Plugin plugin) {
@@ -73,6 +74,57 @@ public class MinionUpgradeManager {
                 }
             }
         }
+        if (defaultTiers != null) {
+            for (String tierKey : defaultTiers.getKeys(false)) {
+                int tier = Integer.parseInt(tierKey);
+                int storageSize = defaultTiers.getInt(tierKey + ".storage-size");
+                if (storageSize > 0) {
+                    tierStorageSizes.put(tier, storageSize);
+                }
+            }
+        }
+    }
+
+    /**
+     * Gets the storage size for a given minion type and tier from the config.
+     * It checks the specific minion type first, then falls back to default settings.
+     *
+     * @param minionType The type of minion (e.g., "miner")
+     * @param tier The tier number to look up.
+     * @return The configured storage size.
+     */
+    public int getStorageSizeForTier(String minionType, int tier) {
+        FileConfiguration config = plugin.getConfig();
+        String tierStr = String.valueOf(tier);
+
+        // Path for the specific minion type (e.g., "miner.tiers.2")
+        String specificTierPath = minionType.toLowerCase() + ".tiers." + tierStr;
+        // Path for the default settings
+        String defaultTierPath = "default.tiers." + tierStr;
+
+        int size = 0;
+
+        // 1. Check the specific minion type's config first (e.g., miner.tiers.2.storage-size)
+        if (config.isSet(specificTierPath + ".storage-size")) {
+            size = config.getInt(specificTierPath + ".storage-size");
+        }
+        // 2. If not found, check the default tier settings (e.g., default.tiers.2.storage-size)
+        else if (config.isSet(defaultTierPath + ".storage-size")) {
+            size = config.getInt(defaultTierPath + ".storage-size");
+        }
+
+        // 3. If no value is found in the config, calculate a default size
+        if (size <= 0) {
+            return Math.min(tier * 9, 54); // Default: 9 slots per tier, max 54
+        }
+
+        // Ensure the size is a multiple of 9 for a clean GUI, and not over 54
+        size = Math.min(54, (int) (Math.ceil(size / 9.0) * 9));
+        return Math.max(9, size); // Ensure minimum size is 9
+    }
+
+    public int getStorageSize(int tier) {
+        return tierStorageSizes.getOrDefault(tier, 9);
     }
 
     public int getDelay(MinionType type, int tier) {

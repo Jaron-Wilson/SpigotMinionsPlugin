@@ -1331,6 +1331,38 @@ public class InventoryClick implements Listener {
                         int currentTier = armorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
                         armorStand.getPersistentDataContainer().set(plugin.tierKey, PersistentDataType.INTEGER, targetTier);
 
+                        // *** MINION STORAGE UPGRADE LOGIC STARTS HERE ***
+
+// 1. Get the minion's type to look up the correct config section
+                        String minionTypeStr = armorStand.getPersistentDataContainer().getOrDefault(
+                                plugin.minionTypeKey, PersistentDataType.STRING, "miner" // Default to "miner" if not set
+                        );
+
+// 2. Get the new storage size from the UpgradeManager using the method from Step 1
+                        int newSize = plugin.getUpgradeManager().getStorageSizeForTier(minionTypeStr, targetTier);
+
+// 3. Get the old storage inventory
+                        Inventory oldStorage = plugin.getMinionStorage(minionUUID);
+
+// 4. Create a new inventory with the larger size (This requires the fix to StorageHolder)
+                        Inventory newStorage = Bukkit.createInventory(new MinionPlugin.StorageHolder(minionUUID), newSize, ChatColor.AQUA + "Minion Storage");
+
+// 5. Copy items from the old inventory to the new one
+                        if (oldStorage != null) {
+                            for (int i = 0; i < Math.min(oldStorage.getSize(), newStorage.getSize()); i++) {
+                                ItemStack item = oldStorage.getItem(i);
+                                // Copy the item if it's not a UI button
+                                if (item != null && item.getType() != Material.BARRIER && item.getType() != Material.HOPPER && item.getType() != Material.RED_STAINED_GLASS_PANE) {
+                                    newStorage.setItem(i, item);
+                                }
+                            }
+                        }
+
+// 6. Set the new storage inventory for the minion and add the UI buttons back
+                        plugin.setMinionStorage(minionUUID, newStorage);
+                        plugin.setupMinionStorageUI(newStorage); // Re-apply UI buttons like "Back" and "Collect"
+
+
                         // Consume the materials (they're already in the GUI)
                         player.sendMessage(ChatColor.GREEN + "Minion upgraded from Tier " + currentTier + " to Tier " + targetTier + "!");
                         player.openInventory(minion.getActionInventory());
