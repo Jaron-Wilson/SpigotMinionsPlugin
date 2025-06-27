@@ -54,7 +54,6 @@ public class MinionPlugin extends JavaPlugin {
         return minions;
     }
 
-    // Add getter for the upgrade manager
     public MinionUpgradeManager getUpgradeManager() {
         return upgradeManager;
     }
@@ -143,7 +142,9 @@ public class MinionPlugin extends JavaPlugin {
             as.setInvulnerable(true);
 
             as.setArms(true);
-            as.getEquipment().setItemInMainHand(new ItemStack(Material.WOODEN_PICKAXE));
+            if (as.getEquipment() != null) {
+                as.getEquipment().setItemInMainHand(new ItemStack(Material.WOODEN_SWORD));
+            }
 
             as.setCustomNameVisible(true);
 
@@ -166,10 +167,8 @@ public class MinionPlugin extends JavaPlugin {
             Minion minion = new Minion(this, as);
             minions.computeIfAbsent(owner.getUniqueId(), k -> new ArrayList<>()).add(minion);
 
-            // Register the new minion in activeMinions map
             registerMinion(minion);
 
-            // auto-start if owner has automation active
             if (automationPlayers.contains(owner.getUniqueId())) {
                 minion.startAutomation();
             }
@@ -191,7 +190,6 @@ public class MinionPlugin extends JavaPlugin {
         UUID ownerUUID = owner.getUniqueId();
         UUID minionUUID = armorStand.getUniqueId();
 
-        // Unregister from active minions
         unregisterMinion(minionUUID);
 
         minionInventories.remove(minionUUID);
@@ -206,12 +204,10 @@ public class MinionPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Stop all minion tasks before saving
         for (Minion minion : getActiveMinions()) {
             minion.stopAutomation();
         }
 
-        // Save all data before plugin is disabled
         saveAllData();
 
     }
@@ -222,7 +218,6 @@ public class MinionPlugin extends JavaPlugin {
             dataFolder.mkdirs();
         }
 
-        // Save minion inventories
         File minionStorage = new File(dataFolder, "minion-storage.yml");
         YamlConfiguration minionConfig = new YamlConfiguration();
 
@@ -235,7 +230,6 @@ public class MinionPlugin extends JavaPlugin {
                 ItemStack item = inv.getItem(i);
                 if (item != null && item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
                     String displayName = item.getItemMeta().getDisplayName();
-                    // Skip UI elements
                     if (displayName.equals(ChatColor.RED + "Back") ||
                         displayName.equals(ChatColor.GREEN + "Collect All") ||
                         displayName.equals(ChatColor.GREEN + "Collect from Chest")) {
@@ -269,7 +263,10 @@ public class MinionPlugin extends JavaPlugin {
             getLogger().warning("Failed to save bundle storage data: " + e.getMessage());
         }
 
-        // Save minion statistics
+        saveStatsYML(dataFolder);
+    }
+
+    private void saveStatsYML(File dataFolder) {
         File statsFile = new File(dataFolder, "minion-stats.yml");
         YamlConfiguration statsConfig = new YamlConfiguration();
 
@@ -292,7 +289,6 @@ public class MinionPlugin extends JavaPlugin {
             return;
         }
 
-        // Load minion inventories
         File minionStorage = new File(dataFolder, "minion-storage.yml");
         if (minionStorage.exists()) {
             YamlConfiguration minionConfig = YamlConfiguration.loadConfiguration(minionStorage);
@@ -306,10 +302,8 @@ public class MinionPlugin extends JavaPlugin {
                             String path = "minions." + uuidStr;
                             int size = minionConfig.getInt(path + ".size", 27);
 
-                            // Create inventory with proper name and size
                             Inventory inv = Bukkit.createInventory(new StorageHolder(uuid), size, ChatColor.AQUA + "Minion Storage");
 
-                            // Load items
                             ConfigurationSection items = minionConfig.getConfigurationSection(path + ".items");
                             if (items != null) {
                                 for (String slot : items.getKeys(false)) {
@@ -320,7 +314,6 @@ public class MinionPlugin extends JavaPlugin {
                                 }
                             }
 
-                            // Add UI elements
                             setupMinionStorageUI(inv);
 
                             minionInventories.put(uuid, inv);
@@ -333,7 +326,6 @@ public class MinionPlugin extends JavaPlugin {
             getLogger().info("Successfully loaded minion storage data!");
         }
 
-        // Load bundle contents
         File bundleStorage = new File(dataFolder, "bundle-storage.yml");
         if (bundleStorage.exists()) {
             YamlConfiguration bundleConfig = YamlConfiguration.loadConfiguration(bundleStorage);
@@ -341,33 +333,12 @@ public class MinionPlugin extends JavaPlugin {
             getLogger().info("Successfully loaded bundle data!");
         }
 
-        // Load minion statistics
-        File statsFile = new File(dataFolder, "minion-stats.yml");
-        if (statsFile.exists()) {
-            YamlConfiguration statsConfig = YamlConfiguration.loadConfiguration(statsFile);
-
-            if (statsConfig.contains("stats")) {
-                ConfigurationSection statsSection = statsConfig.getConfigurationSection("stats");
-                if (statsSection != null) {
-                    for (String uuidStr : statsSection.getKeys(false)) {
-                        try {
-                            UUID uuid = UUID.fromString(uuidStr);
-                            Map<String, Object> serialized = statsSection.getConfigurationSection(uuidStr).getValues(false);
-                            MinionStats stats = new MinionStats(serialized);
-                            minionStats.put(uuid, stats);
-                        } catch (Exception e) {
-                            getLogger().warning("Error loading stats for minion " + uuidStr + ": " + e.getMessage());
-                        }
-                    }
-                }
-            }
-            getLogger().info("Successfully loaded minion statistics data!");
-        }
+        loadMinionStats();
     }
 
     private void loadMinions() {
         minions.clear();
-        activeMinions.clear(); // Clear active minions before reloading
+        activeMinions.clear();
 
         for (World world : Bukkit.getWorlds()) {
             for (Entity entity : world.getEntities()) {
@@ -414,42 +385,14 @@ public class MinionPlugin extends JavaPlugin {
         }
         inv.setItem(inv.getSize() - 2, collectAll);
 
-        // Add back button
-        ItemStack back = new ItemStack(Material.BARRIER);
-        ItemMeta backMeta = back.getItemMeta();
-        if (backMeta != null) {
-            backMeta.setDisplayName(ChatColor.RED + "Back");
-            back.setItemMeta(backMeta);
-        }
+        ItemStack back = Minion.createBackButton();
         inv.setItem(inv.getSize() - 1, back);
     }
 
-    // Methods for managing minion stats
     public MinionStats getMinionStats(UUID minionUUID) {
         return minionStats.computeIfAbsent(minionUUID, uuid -> new MinionStats());
     }
 
-    public void saveMinionStats() {
-        File dataFolder = getDataFolder();
-        if (!dataFolder.exists()) {
-            dataFolder.mkdirs();
-        }
-
-        File statsFile = new File(dataFolder, "minion-stats.yml");
-        YamlConfiguration statsConfig = new YamlConfiguration();
-
-        for (Map.Entry<UUID, MinionStats> entry : minionStats.entrySet()) {
-            String path = "stats." + entry.getKey().toString();
-            statsConfig.set(path, entry.getValue().serialize());
-        }
-
-        try {
-            statsConfig.save(statsFile);
-            getLogger().info("Successfully saved minion statistics data!");
-        } catch (IOException e) {
-            getLogger().warning("Failed to save minion statistics data: " + e.getMessage());
-        }
-    }
 
     public void loadMinionStats() {
         File dataFolder = getDataFolder();
@@ -480,4 +423,3 @@ public class MinionPlugin extends JavaPlugin {
         }
     }
 }
-

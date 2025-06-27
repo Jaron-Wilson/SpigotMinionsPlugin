@@ -71,10 +71,12 @@ public class InventoryClick implements Listener {
         String minionTypeStr = armorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
         MinionType minionType = MinionType.valueOf(minionTypeStr);
 
-        // Handle clicks based on new slot layout
-        if (event.getSlot() == 10) { // Toggle Minion Type
+        if (event.getSlot() == 10) {
             MinionType currentType = MinionType.valueOf(minionTypeStr);
             MinionType newType = currentType == MinionType.BLOCK_MINER ? MinionType.FARMER : MinionType.BLOCK_MINER;
+            armorStand.getEquipment().setItemInMainHand(
+                    new ItemStack(newType == MinionType.BLOCK_MINER ? Material.WOODEN_PICKAXE : Material.WOODEN_HOE)
+            );
             openTypeConfirmationGUI(player, minionUUID, newType);
         } else if (event.getSlot() == 11 && minionType == MinionType.FARMER) { // Toggle Seeds (only for farmer)
             byte wantsSeeds = armorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1);
@@ -868,26 +870,36 @@ public class InventoryClick implements Listener {
 
         event.setCancelled(true);
 
+        Result result = getResult(event, player, holder);
+        if (result == null) return;
+
+        if (result.clickedItem().getType() == Material.GREEN_WOOL) {
+            Material targetMaterial = holder.getTargetMaterial();
+            result.armorStand().getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, targetMaterial.name());
+            player.sendMessage(ChatColor.GREEN + "Minion target set to " + targetMaterial.name());
+            player.openInventory(result.minion().getActionInventory());
+        } else if (result.clickedItem().getType() == Material.RED_WOOL) {
+            player.openInventory(result.minion().getActionInventory());
+        }
+    }
+
+    private Result getResult(InventoryClickEvent event, Player player, ConfirmationHolder holder) {
         ItemStack clickedItem = event.getCurrentItem();
-        if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+        if (clickedItem == null || clickedItem.getType() == Material.AIR) return null;
 
         UUID minionUUID = holder.getMinionUUID();
         Entity entity = Bukkit.getServer().getEntity(minionUUID);
         if (!(entity instanceof ArmorStand armorStand)) {
             player.closeInventory();
-            return;
+            return null;
         }
 
         Minion minion = new Minion(plugin, armorStand);
+        Result result = new Result(clickedItem, armorStand, minion);
+        return result;
+    }
 
-        if (clickedItem.getType() == Material.GREEN_WOOL) {
-            Material targetMaterial = holder.getTargetMaterial();
-            armorStand.getPersistentDataContainer().set(plugin.targetKey, PersistentDataType.STRING, targetMaterial.name());
-            player.sendMessage(ChatColor.GREEN + "Minion target set to " + targetMaterial.name());
-            player.openInventory(minion.getActionInventory());
-        } else if (clickedItem.getType() == Material.RED_WOOL) {
-            player.openInventory(minion.getActionInventory());
-        }
+    private record Result(ItemStack clickedItem, ArmorStand armorStand, Minion minion) {
     }
 
     @EventHandler
@@ -909,7 +921,9 @@ public class InventoryClick implements Listener {
                 Inventory minionInv = minion.getMinionStorage();
                 List<ItemStack> itemsToCollect = new ArrayList<>();
                 for (ItemStack item : minionInv.getContents()) {
-                    if (item != null && item.getType() != Material.BARRIER && item.getType() != Material.HOPPER) {
+                    if (item != null && item.getType() != Material.BARRIER
+                            && item.getType() != Material.HOPPER
+                            && item.getType() != Material.RED_STAINED_GLASS_PANE) {
                         itemsToCollect.add(item);
                     }
                 }
