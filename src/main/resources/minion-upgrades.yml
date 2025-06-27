@@ -7,7 +7,6 @@ default:
     1:
       delay: 5000  # Base delay in milliseconds between actions for tier 1 (5 seconds)
       efficiency: 1.0  # Base efficiency multiplier (affects success rate)
-      range: 2  # Range of blocks the minion can reach
       display_name: "&7Basic Minion &6 Tier 1"
       hologram_message: "&7Working..."
       # Action-specific messages for tier 1
@@ -27,7 +26,6 @@ default:
     2:
       delay: 4000  # 4 seconds
       efficiency: 1.2
-      range: 3
       display_name: "&7Improved Minion &6 Tier 2"
       hologram_message: "&7Working harder..."
       messages:
@@ -37,7 +35,6 @@ default:
     3:
       delay: 3000  # 3 seconds
       efficiency: 1.5
-      range: 3
       display_name: "&eAdvanced Minion &6 Tier 3"
       hologram_message: "&eWorking efficiently!"
       messages:
@@ -50,7 +47,6 @@ default:
     4:
       delay: 2000  # 2 seconds
       efficiency: 1.8
-      range: 4
       display_name: "&eSuperior Minion &6 Tier 4"
       hologram_message: "&eWorking super fast!"
       messages:
@@ -61,7 +57,6 @@ default:
     5:
       delay: 1000  # 1 second
       efficiency: 2.0
-      range: 5
       display_name: "&6Expert Minion &6 Tier 5"
       hologram_message: "&6I am speed!"
       messages:
@@ -74,7 +69,6 @@ default:
     6:
       delay: 900
       efficiency: 2.5
-      range: 5
       display_name: "&6Master Minion &6 Tier 6"
       hologram_message: "&6Working at light speed!"
       messages:
@@ -85,7 +79,6 @@ default:
     7:
       delay: 800
       efficiency: 3.0
-      range: 6
       display_name: "&bElite Minion &6 Tier 7"
       hologram_message: "&bI'm too fast to see!"
       messages:
@@ -97,7 +90,6 @@ default:
     8:
       delay: 700
       efficiency: 3.5
-      range: 6
       display_name: "&bSupreme Minion &6 Tier 8"
       hologram_message: "&bWorking at warp speed!"
       messages:
@@ -109,7 +101,6 @@ default:
     9:
       delay: 600
       efficiency: 4.0
-      range: 7
       display_name: "&5Legendary Minion &6 Tier 9"
       hologram_message: "&5I control time and space!"
       messages:
@@ -123,7 +114,6 @@ default:
     10:
       delay: 500
       efficiency: 5.0
-      range: 8
       display_name: "&dUltimate Minion &6 Tier 10+"
       hologram_message: "&dI am beyond comprehension!"
       messages:

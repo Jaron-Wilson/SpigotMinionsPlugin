@@ -251,22 +251,17 @@ public class Minion {
     private void sendStorageFullNotification(Player owner) {
         long currentTime = System.currentTimeMillis();
 
-        // Check if we're on cooldown for notifications
         if (!notifiedStorageFull || (currentTime - lastNotificationTime) > NOTIFICATION_COOLDOWN) {
-            // Update notification tracking
             notifiedStorageFull = true;
             lastNotificationTime = currentTime;
 
-            // Send notification to player if online
             if (owner != null && owner.isOnline()) {
-                // Title notification (appears in center of screen)
                 owner.sendTitle(
                         ChatColor.RED + "Storage Full!",
                         ChatColor.YELLOW + "Your " + getMinionTypeName() + " minion needs attention",
                         10, 70, 20
                 );
 
-                // Chat message with location info
                 Location loc = minionArmorStand.getLocation();
                 String locationInfo = String.format("(x:%d, y:%d, z:%d)",
                         loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
@@ -275,12 +270,10 @@ public class Minion {
                         ChatColor.YELLOW + "Your " + getMinionTypeName() +
                         " minion's storage is full! " + ChatColor.GRAY + locationInfo);
 
-                // Play sound
                 owner.playSound(owner.getLocation(),
                         org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 0.5f);
             }
 
-            // Notify minion bundle if enabled
             notifyMinionBundle(owner);
         }
     }
@@ -297,22 +290,18 @@ public class Minion {
                 .reduce((a, b) -> a + " " + b).orElse(minionTypeStr);
     }
     private void notifyMinionBundle(Player owner) {
-        // Get the bundle ID this minion belongs to (if any)
         String bundleId = minionArmorStand.getPersistentDataContainer()
                 .getOrDefault(plugin.minionBundleKey, PersistentDataType.STRING, "");
 
         if (bundleId.isEmpty()) return;
 
-        // Find all other minions in the same bundle and update their status
         for (Minion otherMinion : plugin.getActiveMinions()) {
-            if (otherMinion.getUUID().equals(this.getUUID())) continue; // Skip self
+            if (otherMinion.getUUID().equals(this.getUUID())) continue;
 
             String otherBundleId = otherMinion.getBundleId();
             if (bundleId.equals(otherBundleId)) {
-                // Update bundle member status
                 otherMinion.setBundleAlert(true);
 
-                // If owner is viewing any bundle member's inventory, refresh it
                 for (Player player : Bukkit.getOnlinePlayers()) {
                     if (player.getOpenInventory().getTopInventory().getHolder() instanceof MinionInventoryHolder) {
                         MinionInventoryHolder holder = (MinionInventoryHolder)
@@ -340,11 +329,9 @@ public class Minion {
 
 
 
-    // Mine single cell
     public void mineBlock() {
         processCell(true);
     }
-    // Plant single cell
     public void plantBlock() {
         processCell(false);
     }
@@ -407,25 +394,23 @@ public class Minion {
 
         boolean didSomething = false;
 
-        if (forceMine != null) { // Manual override from commands
-            if (forceMine) { // Mine Once
+        if (forceMine != null) {
+            if (forceMine) {
                 if (block.getType() == mat) {
                     didSomething = minionMineEvent(block, chestInv, storage, world);
                 }
-            } else { // Plant Once
+            } else {
                 if (block.getType() == Material.AIR) {
                     didSomething = plantBlock(block, mat);
                 }
             }
-        } else { // Automation logic
+        } else {
             boolean storageSystemFull = isStorageFull(mat, storage, chestInv);
             if (storageSystemFull) {
-                // If storage is full, only plant
                 if (block.getType() == Material.AIR) {
                     didSomething = plantBlock(block, mat);
                 }
             } else {
-                // If storage is not full, prioritize mining, then planting
                 if (block.getType() == mat) {
                     didSomething = minionMineEvent(block, chestInv, storage, world);
                 } else if (block.getType() == Material.AIR) {
@@ -439,7 +424,6 @@ public class Minion {
             if (storageSystemFull) {
                 setMinionCustomName(ChatColor.RED + "Storage Full!");
 
-                // Get the owner of this minion
                 UUID ownerUUID = minionArmorStand.getPersistentDataContainer()
                         .getOrDefault(plugin.ownerKey, PersistentDataType.STRING, "")
                         .isEmpty() ? null : UUID.fromString(minionArmorStand.getPersistentDataContainer()
@@ -460,22 +444,19 @@ public class Minion {
             }
         }
         else {
-            // Reset notification when minion successfully did something
             resetStorageFullNotification();
         }
-        Bukkit.getScheduler().runTaskLater(plugin, this::resetLook, 20L); // 1 second later
+        Bukkit.getScheduler().runTaskLater(plugin, this::resetLook, 20L);
 
         minionArmorStand.setCustomNameVisible(true);
     }
 
-    // Helper method to set minion's custom name with tier-based custom names from config
     private void setMinionCustomName(String defaultName) {
         int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
         String minionTypeStr = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.minionTypeKey, PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
         String minionTypeLower = minionTypeStr.toLowerCase();
 
-        // Extract the action type from the default name to determine what the minion is doing
-        String actionType = "idle"; // Default action
+        String actionType = "idle";
 
         if (defaultName.contains("Mining")) {
             actionType = "mining";
@@ -503,7 +484,6 @@ public class Minion {
             actionType = "cannot_plant";
         }
 
-        // Try to get action-specific message from config
         String actionMessage = (String) plugin.getUpgradeManager().getCustomSetting(
             minionTypeLower, tier, "messages." + actionType, null);
 
@@ -512,7 +492,6 @@ public class Minion {
             return;
         }
 
-        // Fall back to default action message from default section
         actionMessage = (String) plugin.getUpgradeManager().getCustomSetting(
             "default", tier, "messages." + actionType, null);
 
@@ -521,34 +500,26 @@ public class Minion {
             return;
         }
 
-        // When idle, alternate between display_name (more frequent) and hologram_message (less frequent)
         if (actionType.equals("idle")) {
-            // Get display_name from config
             String displayName = plugin.getUpgradeManager().getDisplayName(minionTypeLower, tier);
 
-            // Get hologram_message from config
             String hologramMessage = plugin.getUpgradeManager().getHologramMessage(minionTypeLower, tier);
             resetLook();
 
-            // Random chance to show hologram_message (20% chance) or display_name (80% chance)
             if (displayName != null && !displayName.isEmpty()) {
                 if (hologramMessage != null && !hologramMessage.isEmpty() && Math.random() < 0.2) {
-                    // 20% chance to show hologram_message
                     minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', hologramMessage));
                 } else {
-                    // 80% chance to show display_name
                     minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', displayName));
                 }
                 return;
             }
 
-            // Fall back to hologram_message if display_name wasn't available
             if (hologramMessage != null && !hologramMessage.isEmpty()) {
                 minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', hologramMessage));
                 return;
             }
         } else {
-            // For non-idle states, use the existing logic for hologram_message
             String customHologram = plugin.getUpgradeManager().getHologramMessage(minionTypeLower, tier);
             if (customHologram != null && !customHologram.isEmpty()) {
                 minionArmorStand.setCustomName(ChatColor.translateAlternateColorCodes('&', customHologram));
@@ -556,7 +527,6 @@ public class Minion {
             }
         }
 
-        // Fall back to default message if no custom messages found
         minionArmorStand.setCustomName(defaultName);
     }
 
@@ -571,7 +541,7 @@ public class Minion {
         try {
             currentState = FarmerState.valueOf(stateStr);
         } catch (IllegalArgumentException e) {
-            currentState = FarmerState.HARVESTING; // Default state
+            currentState = FarmerState.HARVESTING;
         }
 
         String targetStr = persistentDataContainer.getOrDefault(plugin.targetKey, PersistentDataType.STRING, Material.WHEAT.name());
@@ -591,7 +561,6 @@ public class Minion {
 
         Block cropBlock = soilBlock.getRelative(0, 1, 0);
 
-        // Get tier and bonemeal chance from config
         int tier = persistentDataContainer.getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
         double boneMealChance = plugin.getUpgradeManager().getBoneMealChance(tier);
 
@@ -617,14 +586,12 @@ public class Minion {
                 }
                 break;
             case HARVESTING:
-                // Check storage fullness first
                 Material cropProduct = getHarvestedProduct(targetCrop);
                 boolean storageSystemFull = isStorageFull(cropProduct, storage, chestInv);
 
                 if (storageSystemFull) {
                     setMinionCustomName(ChatColor.RED + "Storage Full!");
 
-                    // Get the owner of this minion
                     UUID ownerUUID = minionArmorStand.getPersistentDataContainer()
                             .getOrDefault(plugin.ownerKey, PersistentDataType.STRING, "")
                             .isEmpty() ? null : UUID.fromString(minionArmorStand.getPersistentDataContainer()
@@ -634,7 +601,7 @@ public class Minion {
                         Player owner = Bukkit.getPlayer(ownerUUID);
                         sendStorageFullNotification(owner);
                     }
-                    break; // Skip harvesting when storage is full
+                    break;
                 }
 
                 // Harvest logic
@@ -645,13 +612,10 @@ public class Minion {
                     } else {
                         setMinionCustomName(ChatColor.YELLOW + "Waiting to grow");
 
-                        // Apply bonemeal chance based on tier
                         if (boneMealChance > 0 && Math.random() < boneMealChance) {
-                            // Apply bonemeal effect (increase age)
                             int currentAge = ageable.getAge();
                             int maxAge = ageable.getMaximumAge();
 
-                            // Only apply if not max age
                             if (currentAge < maxAge) {
                                 Ageable newAgeable = (Ageable) ageable.clone();
                                 newAgeable.setAge(Math.min(currentAge + 1, maxAge));
@@ -661,7 +625,6 @@ public class Minion {
                         }
                     }
                 }
-                // Planting logic
                 else if (cropBlock.getType() == Material.AIR) {
                     // canPlant checks the soil, so we pass the cropBlock
                     if (canPlant(cropBlock, targetCrop)) {
@@ -748,22 +711,17 @@ public class Minion {
         Inventory chestInv = checkForChest(world, minionArmorStand.getLocation());
         Material seedType = getSeedMaterial(targetCrop);
 
-        // Get tier for configuration-based features
         int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
         double doubleCropsChance = plugin.getUpgradeManager().getDoubleCropsChance(tier);
 
         Collection<ItemStack> drops = new ArrayList<>(block.getDrops());
 
-        // Get minion stats
         MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
         stats.incrementTimesHarvested();
 
-        // Apply double crops chance based on tier
         if (doubleCropsChance > 0 && Math.random() < doubleCropsChance) {
-            // Clone the drops to simulate getting double
             Collection<ItemStack> extraDrops = new ArrayList<>();
             for (ItemStack drop : drops) {
-                // Only duplicate non-seed items
                 if (drop.getType() != seedType) {
                     ItemStack clone = drop.clone();
                     extraDrops.add(clone);
@@ -776,22 +734,18 @@ public class Minion {
 
         block.setType(Material.AIR);
 
-        // Replant logic - seeds are infinite
         Block soil = block.getRelative(0, -1, 0);
         if (soil.getType() == Material.FARMLAND || (getPlantableCrop(targetCrop) == Material.NETHER_WART && soil.getType() == Material.SOUL_SAND)) {
             block.setType(getPlantableCrop(targetCrop));
         }
 
-        // Seed collection toggle logic
         boolean wantsSeeds = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.wantsSeedsKey, PersistentDataType.BYTE, (byte)1) == 1;
         if (!wantsSeeds) {
-            // Filter out any seed items when seeds are not wanted
             drops.removeIf(item -> item.getType() == seedType ||
                            item.getType() == Material.WHEAT_SEEDS ||
                            item.getType() == Material.BEETROOT_SEEDS);
         }
 
-        // Add remaining drops to storage
         for (ItemStack drop : drops) {
             if (drop.getAmount() > 0) {
                 addToStorage(drop, storage, chestInv, world, block.getLocation());
@@ -876,7 +830,6 @@ public class Minion {
         lookAtBlock(block);
         block.setType(mat);
 
-        // Track planting statistics
         MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
         stats.incrementItemsPlaced();
 
@@ -911,24 +864,18 @@ public class Minion {
 
         lookAtBlock(block);
 
-        // Get tier for fortune ability
         int tier = minionArmorStand.getPersistentDataContainer().getOrDefault(plugin.tierKey, PersistentDataType.INTEGER, 1);
         double fortuneChance = plugin.getUpgradeManager().getFortuneChance(tier);
 
-        // Get initial drops
         Collection<ItemStack> drops = new ArrayList<>(block.getDrops());
 
-        // Get minion stats
         MinionStats stats = plugin.getMinionStats(minionArmorStand.getUniqueId());
         stats.incrementItemsMined();
 
-        // Apply fortune chance based on tier
         if (fortuneChance > 0 && Math.random() < fortuneChance) {
-            // Add extra items (similar to Fortune enchantment)
             Collection<ItemStack> extraDrops = new ArrayList<>();
             for (ItemStack drop : drops) {
                 ItemStack extraDrop = drop.clone();
-                // Don't duplicate special rare items or blocks that should remain singular
                 if (!isSpecialRareDrop(extraDrop.getType())) {
                     extraDrops.add(extraDrop);
                     setMinionCustomName(ChatColor.GREEN + "Fortune Effect!");
@@ -938,7 +885,6 @@ public class Minion {
             drops.addAll(extraDrops);
         }
 
-        // Add all drops to storage
         for (ItemStack drop : drops) {
             addToStorage(drop, storage, chestInv, world, block.getLocation());
         }
@@ -1137,7 +1083,7 @@ public class Minion {
         if (meta != null) {
             meta.setDisplayName(ChatColor.GOLD + name);
             List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.WHITE + "" + value);  // Using empty string to force string concatenation
+            lore.add(ChatColor.WHITE + "" + value);
             meta.setLore(lore);
             item.setItemMeta(meta);
         }
