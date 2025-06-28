@@ -110,6 +110,7 @@ public class MinionPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new InventoryClick(this), this);
         getServer().getPluginManager().registerEvents(new MinionSpawnListener(this), this);
         getServer().getPluginManager().registerEvents(new BundleInteractListener(this), this);
+        getServer().getPluginManager().registerEvents(new PlayersConnection(), this);
 
         // Register commands
         Objects.requireNonNull(getCommand("createminion")).setExecutor(new CreateMinionCommand(this));
@@ -117,6 +118,7 @@ public class MinionPlugin extends JavaPlugin {
         Objects.requireNonNull(getCommand("giveminionegg")).setExecutor(new GiveMinionEggCommand(this));
         Objects.requireNonNull(getCommand("minionautomation")).setExecutor(new MinionAutomationCommand(this));
         Objects.requireNonNull(getCommand("collectall")).setExecutor(new CollectAllCommand(this));
+        Objects.requireNonNull(getCommand("deleteallminions")).setExecutor(new DeleteAllMinionsCommand(this));
         Objects.requireNonNull(getCommand("getbundle")).setExecutor((sender, cmd, label, args) -> {
             if (sender instanceof Player player) {
                 bundleManager.createBundle(player);
@@ -125,7 +127,7 @@ public class MinionPlugin extends JavaPlugin {
             }
             return false;
         });
-        Objects.requireNonNull(getCommand("deleteallminions")).setExecutor(new DeleteAllMinionsCommand(this));
+
     }
 
     public MinionBundleManager getBundleManager() {
