@@ -1,4 +1,5 @@
 # Minecraft Minion Plugin
+![image](https://github.com/user-attachments/assets/b1eccbfe-743e-4fe3-b964-86487a25b07f)
 
 A comprehensive Minecraft plugin that adds customizable, automated minions to your server. These minions can perform various tasks like mining blocks, farming crops, and more while storing collected resources for players.
 
