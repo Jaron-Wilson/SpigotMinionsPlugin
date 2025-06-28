@@ -16,23 +16,17 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.ConfigurationSection;
 
-import java.util.Map;
-import java.util.Objects;
-import java.util.HashMap;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.UUID;
+import java.util.*;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.World;
 
 public class MinionPlugin extends JavaPlugin {
 
     public final NamespacedKey ownerKey = new NamespacedKey(this, "minion_owner");
-    public final NamespacedKey isMinionKey = new NamespacedKey(this, "is_minion");
+    public final NamespacedKey isMinionKey = new NamespacedKey(this, "minion_is_minion");
     public final NamespacedKey minionEggKey = new NamespacedKey(this, "minion_spawn_egg");
     public final NamespacedKey tierKey = new NamespacedKey(this, "minion_tier");
     public final NamespacedKey modeKey = new NamespacedKey(this, "minion_mode");
@@ -42,22 +36,39 @@ public class MinionPlugin extends JavaPlugin {
     public final NamespacedKey wantsSeedsKey = new NamespacedKey(this, "minion_wants_seeds");
     public final NamespacedKey farmerStateKey = new NamespacedKey(this, "farmer_state");
     public final NamespacedKey lastActionTimeKey = new NamespacedKey(this, "last_action_time");
+    public final NamespacedKey statsKey = new NamespacedKey(this, "minion_stats");
+    public final NamespacedKey minionBundleKey = new NamespacedKey(this, "minion_bundle");
 
     private static MinionPlugin instance;
 
     private final Set<UUID> automationPlayers = new HashSet<>();
-    private final Map<UUID, Inventory> minionInventories = new HashMap<>();
+    private static final Map<UUID, Inventory> minionInventories = new HashMap<>();
     private final Map<UUID, List<Minion>> minions = new HashMap<>();
     private MinionBundleManager bundleManager;
     private MinionUpgradeManager upgradeManager;
+    private final Map<UUID, Minion> activeMinions = new HashMap<>();
+
+    private final Map<UUID, MinionStats> minionStats = new HashMap<>();
 
     public Map<UUID, List<Minion>> getMinions() {
         return minions;
     }
 
-    // Add getter for the upgrade manager
     public MinionUpgradeManager getUpgradeManager() {
         return upgradeManager;
+    }
+
+
+    public void registerMinion(Minion minion) {
+        activeMinions.put(minion.getUUID(), minion);
+    }
+
+    public void unregisterMinion(UUID minionUUID) {
+        activeMinions.remove(minionUUID);
+    }
+
+    public Collection<Minion> getActiveMinions() {
+        return activeMinions.values();
     }
 
     public Inventory getMinionStorage(UUID uuid) {
@@ -76,7 +87,7 @@ public class MinionPlugin extends JavaPlugin {
         minionInventories.put(minionUUID, inventory);
     }
 
-    public class StorageHolder implements InventoryHolder {
+    public static class StorageHolder implements InventoryHolder {
         private final UUID uuid;
         public StorageHolder(UUID uuid) { this.uuid = uuid; }
         public UUID getMinionUUID() { return uuid; }
@@ -129,7 +140,11 @@ public class MinionPlugin extends JavaPlugin {
             as.setSmall(true);
             as.setGravity(false);
             as.setInvulnerable(true);
+
             as.setArms(true);
+            if (as.getEquipment() != null) {
+                as.getEquipment().setItemInMainHand(new ItemStack(Material.WOODEN_SWORD));
+            }
 
             as.setCustomNameVisible(true);
 
@@ -152,13 +167,14 @@ public class MinionPlugin extends JavaPlugin {
             Minion minion = new Minion(this, as);
             minions.computeIfAbsent(owner.getUniqueId(), k -> new ArrayList<>()).add(minion);
 
-            // auto-start if owner has automation active
+            registerMinion(minion);
+
             if (automationPlayers.contains(owner.getUniqueId())) {
-                new Minion(this, as).startAutomation();
+                minion.startAutomation();
             }
         });
 
-        owner.sendMessage(ChatColor.GREEN + "A new CobbleMinion has been spawned!");
+        owner.sendMessage(ChatColor.GREEN + "A new Minion has been spawned!");
     }
 
     /** Called by MinionAutomationCommand */
@@ -172,7 +188,11 @@ public class MinionPlugin extends JavaPlugin {
 
     public void removeMinion(Player owner, ArmorStand armorStand) {
         UUID ownerUUID = owner.getUniqueId();
-        minionInventories.remove(armorStand.getUniqueId());
+        UUID minionUUID = armorStand.getUniqueId();
+
+        unregisterMinion(minionUUID);
+
+        minionInventories.remove(minionUUID);
 
         List<Minion> playerMinions = minions.get(ownerUUID);
         if (playerMinions != null) {
@@ -184,7 +204,10 @@ public class MinionPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Save all data before plugin is disabled
+        for (Minion minion : getActiveMinions()) {
+            minion.stopAutomation();
+        }
+
         saveAllData();
 
     }
@@ -195,7 +218,6 @@ public class MinionPlugin extends JavaPlugin {
             dataFolder.mkdirs();
         }
 
-        // Save minion inventories
         File minionStorage = new File(dataFolder, "minion-storage.yml");
         YamlConfiguration minionConfig = new YamlConfiguration();
 
@@ -208,7 +230,6 @@ public class MinionPlugin extends JavaPlugin {
                 ItemStack item = inv.getItem(i);
                 if (item != null && item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
                     String displayName = item.getItemMeta().getDisplayName();
-                    // Skip UI elements
                     if (displayName.equals(ChatColor.RED + "Back") ||
                         displayName.equals(ChatColor.GREEN + "Collect All") ||
                         displayName.equals(ChatColor.GREEN + "Collect from Chest")) {
@@ -241,6 +262,25 @@ public class MinionPlugin extends JavaPlugin {
         } catch (IOException e) {
             getLogger().warning("Failed to save bundle storage data: " + e.getMessage());
         }
+
+        saveStatsYML(dataFolder);
+    }
+
+    private void saveStatsYML(File dataFolder) {
+        File statsFile = new File(dataFolder, "minion-stats.yml");
+        YamlConfiguration statsConfig = new YamlConfiguration();
+
+        for (Map.Entry<UUID, MinionStats> entry : minionStats.entrySet()) {
+            String path = "stats." + entry.getKey().toString();
+            statsConfig.set(path, entry.getValue().serialize());
+        }
+
+        try {
+            statsConfig.save(statsFile);
+            getLogger().info("Successfully saved minion statistics data!");
+        } catch (IOException e) {
+            getLogger().warning("Failed to save minion statistics data: " + e.getMessage());
+        }
     }
 
     private void loadAllData() {
@@ -249,7 +289,6 @@ public class MinionPlugin extends JavaPlugin {
             return;
         }
 
-        // Load minion inventories
         File minionStorage = new File(dataFolder, "minion-storage.yml");
         if (minionStorage.exists()) {
             YamlConfiguration minionConfig = YamlConfiguration.loadConfiguration(minionStorage);
@@ -263,10 +302,8 @@ public class MinionPlugin extends JavaPlugin {
                             String path = "minions." + uuidStr;
                             int size = minionConfig.getInt(path + ".size", 27);
 
-                            // Create inventory with proper name and size
                             Inventory inv = Bukkit.createInventory(new StorageHolder(uuid), size, ChatColor.AQUA + "Minion Storage");
 
-                            // Load items
                             ConfigurationSection items = minionConfig.getConfigurationSection(path + ".items");
                             if (items != null) {
                                 for (String slot : items.getKeys(false)) {
@@ -277,7 +314,6 @@ public class MinionPlugin extends JavaPlugin {
                                 }
                             }
 
-                            // Add UI elements
                             setupMinionStorageUI(inv);
 
                             minionInventories.put(uuid, inv);
@@ -290,17 +326,20 @@ public class MinionPlugin extends JavaPlugin {
             getLogger().info("Successfully loaded minion storage data!");
         }
 
-        // Load bundle contents
         File bundleStorage = new File(dataFolder, "bundle-storage.yml");
         if (bundleStorage.exists()) {
             YamlConfiguration bundleConfig = YamlConfiguration.loadConfiguration(bundleStorage);
             bundleManager.loadData(bundleConfig);
             getLogger().info("Successfully loaded bundle data!");
         }
+
+        loadMinionStats();
     }
 
     private void loadMinions() {
         minions.clear();
+        activeMinions.clear();
+
         for (World world : Bukkit.getWorlds()) {
             for (Entity entity : world.getEntities()) {
                 if (entity instanceof ArmorStand as) {
@@ -311,6 +350,10 @@ public class MinionPlugin extends JavaPlugin {
                                 UUID ownerUUID = UUID.fromString(ownerUUIDString);
                                 Minion minion = new Minion(this, as);
                                 minions.computeIfAbsent(ownerUUID, k -> new ArrayList<>()).add(minion);
+
+                                // Register minion in activeMinions map
+                                registerMinion(minion);
+
                             } catch (IllegalArgumentException e) {
                                 getLogger().warning("Invalid owner UUID on minion: " + ownerUUIDString);
                             }
@@ -319,6 +362,8 @@ public class MinionPlugin extends JavaPlugin {
                 }
             }
         }
+
+        getLogger().info("Loaded " + activeMinions.size() + " active minions");
     }
 
     public void setupMinionStorageUI(Inventory inv) {
@@ -340,13 +385,41 @@ public class MinionPlugin extends JavaPlugin {
         }
         inv.setItem(inv.getSize() - 2, collectAll);
 
-        // Add back button
-        ItemStack back = new ItemStack(Material.BARRIER);
-        ItemMeta backMeta = back.getItemMeta();
-        if (backMeta != null) {
-            backMeta.setDisplayName(ChatColor.RED + "Back");
-            back.setItemMeta(backMeta);
-        }
+        ItemStack back = Minion.createBackButton();
         inv.setItem(inv.getSize() - 1, back);
+    }
+
+    public MinionStats getMinionStats(UUID minionUUID) {
+        return minionStats.computeIfAbsent(minionUUID, uuid -> new MinionStats());
+    }
+
+
+    public void loadMinionStats() {
+        File dataFolder = getDataFolder();
+        if (!dataFolder.exists()) {
+            return;
+        }
+
+        File statsFile = new File(dataFolder, "minion-stats.yml");
+        if (statsFile.exists()) {
+            YamlConfiguration statsConfig = YamlConfiguration.loadConfiguration(statsFile);
+
+            if (statsConfig.contains("stats")) {
+                ConfigurationSection statsSection = statsConfig.getConfigurationSection("stats");
+                if (statsSection != null) {
+                    for (String uuidStr : statsSection.getKeys(false)) {
+                        try {
+                            UUID uuid = UUID.fromString(uuidStr);
+                            Map<String, Object> serialized = statsSection.getConfigurationSection(uuidStr).getValues(false);
+                            MinionStats stats = new MinionStats(serialized);
+                            minionStats.put(uuid, stats);
+                        } catch (Exception e) {
+                            getLogger().warning("Error loading stats for minion " + uuidStr + ": " + e.getMessage());
+                        }
+                    }
+                }
+            }
+            getLogger().info("Successfully loaded minion statistics data!");
+        }
     }
 }
