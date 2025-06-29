@@ -44,4 +44,6 @@ public class ShowMinionInventoryCommand implements CommandExecutor {
 
         return true;
     }
+
+
 }

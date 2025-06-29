@@ -424,4 +424,81 @@ public class MinionPlugin extends JavaPlugin {
             getLogger().info("Successfully loaded minion statistics data!");
         }
     }
+
+
+    public NamespacedKey getOwnerKey() {
+        return ownerKey;
+    }
+
+    public NamespacedKey getIsMinionKey() {
+        return isMinionKey;
+    }
+
+    public NamespacedKey getMinionEggKey() {
+        return minionEggKey;
+    }
+
+    public NamespacedKey getTierKey() {
+        return tierKey;
+    }
+
+    public NamespacedKey getModeKey() {
+        return modeKey;
+    }
+
+    public NamespacedKey getIndexKey() {
+        return indexKey;
+    }
+
+    public NamespacedKey getTargetKey() {
+        return targetKey;
+    }
+
+    public NamespacedKey getMinionTypeKey() {
+        return minionTypeKey;
+    }
+
+    public NamespacedKey getWantsSeedsKey() {
+        return wantsSeedsKey;
+    }
+
+    public NamespacedKey getFarmerStateKey() {
+        return farmerStateKey;
+    }
+
+    public NamespacedKey getLastActionTimeKey() {
+        return lastActionTimeKey;
+    }
+
+    public NamespacedKey getStatsKey() {
+        return statsKey;
+    }
+
+    public NamespacedKey getMinionBundleKey() {
+        return minionBundleKey;
+    }
+
+    public static MinionPlugin getInstance() {
+        return instance;
+    }
+
+    public static void setInstance(MinionPlugin instance) {
+        MinionPlugin.instance = instance;
+    }
+
+    public Set<UUID> getAutomationPlayers() {
+        return automationPlayers;
+    }
+
+    public void setBundleManager(MinionBundleManager bundleManager) {
+        this.bundleManager = bundleManager;
+    }
+
+    public void setUpgradeManager(MinionUpgradeManager upgradeManager) {
+        this.upgradeManager = upgradeManager;
+    }
+
+    public Map<UUID, MinionStats> getMinionStats() {
+        return minionStats;
+    }
 }

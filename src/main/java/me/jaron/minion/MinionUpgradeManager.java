@@ -461,4 +461,28 @@ public class MinionUpgradeManager {
         List<T> defaultSetting = getSettingFromCache("default", tier, key, List.class);
         return defaultSetting != null ? defaultSetting : defaultValue;
     }
+
+    public FileConfiguration getConfig() {
+        return config;
+    }
+
+    public void setConfig(FileConfiguration config) {
+        this.config = config;
+    }
+
+    public Map<String, Map<Integer, Map<String, Object>>> getTierSettings() {
+        return tierSettings;
+    }
+
+    public Map<Integer, Map<String, Integer>> getUpgradeCosts() {
+        return upgradeCosts;
+    }
+
+    public Map<Integer, Integer> getTierStorageSizes() {
+        return tierStorageSizes;
+    }
+
+    public void setMaxTier(int maxTier) {
+        this.maxTier = maxTier;
+    }
 }
