@@ -1128,4 +1128,44 @@ public class Minion {
             stand.setHeadPose(new EulerAngle(0, 0, 0));
         }
     }
+
+    public ArmorStand getMinionArmorStand() {
+        return minionArmorStand;
+    }
+
+    public BukkitTask getMiningTask() {
+        return miningTask;
+    }
+
+    public void setMiningTask(BukkitTask miningTask) {
+        this.miningTask = miningTask;
+    }
+
+    public boolean isNotifiedStorageFull() {
+        return notifiedStorageFull;
+    }
+
+    public void setNotifiedStorageFull(boolean notifiedStorageFull) {
+        this.notifiedStorageFull = notifiedStorageFull;
+    }
+
+    public long getLastNotificationTime() {
+        return lastNotificationTime;
+    }
+
+    public void setLastNotificationTime(long lastNotificationTime) {
+        this.lastNotificationTime = lastNotificationTime;
+    }
+
+    public String getString() {
+        return string;
+    }
+
+    public void setString(String string) {
+        this.string = string;
+    }
+
+    public boolean isBundleAlert() {
+        return bundleAlert;
+    }
 }

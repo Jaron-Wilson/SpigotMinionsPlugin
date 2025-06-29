@@ -684,4 +684,28 @@ public class MinionBundleManager {
             player.openInventory(getCategoriesInventory(player));
         }
     }
+
+    public Map<UUID, List<ItemStack>> getBundleContents() {
+        return bundleContents;
+    }
+
+    public Map<UUID, Integer> getRawItemsCurrentPage() {
+        return rawItemsCurrentPage;
+    }
+
+    public Map<UUID, Integer> getCategoriesCurrentPage() {
+        return categoriesCurrentPage;
+    }
+
+    public Map<UUID, Integer> getMinionsCurrentPage() {
+        return minionsCurrentPage;
+    }
+
+    public Map<UUID, BundleView> getPlayerBundleView() {
+        return playerBundleView;
+    }
+
+    public NamespacedKey getBundleKey() {
+        return bundleKey;
+    }
 }

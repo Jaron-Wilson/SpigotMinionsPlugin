@@ -176,4 +176,36 @@ public class MinionStats implements ConfigurationSerializable {
 
         return sb.toString();
     }
+
+    public void setItemsMined(long itemsMined) {
+        this.itemsMined = itemsMined;
+    }
+
+    public void setItemsPlaced(long itemsPlaced) {
+        this.itemsPlaced = itemsPlaced;
+    }
+
+    public void setFortuneProcs(long fortuneProcs) {
+        this.fortuneProcs = fortuneProcs;
+    }
+
+    public void setTimesHarvested(long timesHarvested) {
+        this.timesHarvested = timesHarvested;
+    }
+
+    public void setBonemealApplied(long bonemealApplied) {
+        this.bonemealApplied = bonemealApplied;
+    }
+
+    public void setDoubleCropsProcs(long doubleCropsProcs) {
+        this.doubleCropsProcs = doubleCropsProcs;
+    }
+
+    public void setCreationTime(long creationTime) {
+        this.creationTime = creationTime;
+    }
+
+    public void setTotalOperations(long totalOperations) {
+        this.totalOperations = totalOperations;
+    }
 }

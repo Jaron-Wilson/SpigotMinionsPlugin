@@ -33,4 +33,6 @@ public class CreateMinionCommand implements CommandExecutor {
         plugin.spawnMinion(player, spawnLocation);
         return true;
     }
+
+
 }
