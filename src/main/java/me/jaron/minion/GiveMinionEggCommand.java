@@ -14,9 +14,9 @@ import java.util.List;
 
 public class GiveMinionEggCommand implements CommandExecutor {
 
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
 
-    public GiveMinionEggCommand(MinionPlugin plugin) {
+    public GiveMinionEggCommand(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
     }
 

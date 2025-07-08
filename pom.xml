@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>me.jaron</groupId>
-    <artifactId>minecraftminionplugin</artifactId>
-    <version>1.0</version>
+    <artifactId>MinecraftMinionPlugin</artifactId>
+    <version>1.2</version>
     <packaging>jar</packaging>
 
-    <name>minecraftminionplugin</name>
+    <name>MinecraftMinionPlugin</name>
 
     <properties>
         <java.version>21</java.version>

@@ -20,7 +20,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class MinionBundleManager {
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
     private final Map<UUID, List<ItemStack>> bundleContents = new HashMap<>();
     private final Map<UUID, Integer> rawItemsCurrentPage = new HashMap<>();
     private final Map<UUID, Integer> categoriesCurrentPage = new HashMap<>();
@@ -36,7 +36,7 @@ public class MinionBundleManager {
         MINIONS
     }
 
-    public MinionBundleManager(MinionPlugin plugin) {
+    public MinionBundleManager(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
         this.bundleKey = new NamespacedKey(plugin, "minion_bundle");
     }
@@ -182,7 +182,7 @@ public class MinionBundleManager {
         return inv;
     }
 
-    public Inventory getCategoryConfirmationGUI(Player player, Material material, int totalAmount) {
+    public Inventory getCategoryConfirmationWithdrawlGUI(Player player, Material material, int totalAmount) {
         Inventory inv = Bukkit.createInventory(new CategoryConfirmationHolder(player.getUniqueId(), material, totalAmount), 27, "Confirm Withdrawal");
 
         ItemStack displayItem = new ItemStack(material);

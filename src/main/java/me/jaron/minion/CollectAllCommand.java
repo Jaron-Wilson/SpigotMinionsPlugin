@@ -13,9 +13,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 public class CollectAllCommand implements CommandExecutor {
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
 
-    public CollectAllCommand(MinionPlugin plugin) {
+    public CollectAllCommand(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
     }
 

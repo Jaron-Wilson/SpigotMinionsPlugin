@@ -9,9 +9,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 
 public class ShowMinionInventoryCommand implements CommandExecutor {
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
 
-    public ShowMinionInventoryCommand(MinionPlugin plugin) {
+    public ShowMinionInventoryCommand(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
     }
 

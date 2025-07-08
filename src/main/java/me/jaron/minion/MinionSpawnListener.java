@@ -14,9 +14,9 @@ import java.util.Objects;
 
 public class MinionSpawnListener implements Listener {
 
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
 
-    public MinionSpawnListener(MinionPlugin plugin) {
+    public MinionSpawnListener(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
     }
 

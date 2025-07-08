@@ -1,5 +1,6 @@
 package me.jaron.minion;
 
+import me.jaron.minion.api.MinionsAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -12,6 +13,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.ConfigurationSection;
@@ -23,7 +25,7 @@ import java.io.IOException;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.World;
 
-public class MinionPlugin extends JavaPlugin {
+public class MinecraftMinionPlugin extends JavaPlugin {
 
     public final NamespacedKey ownerKey = new NamespacedKey(this, "minion_owner");
     public final NamespacedKey isMinionKey = new NamespacedKey(this, "minion_is_minion");
@@ -39,7 +41,7 @@ public class MinionPlugin extends JavaPlugin {
     public final NamespacedKey statsKey = new NamespacedKey(this, "minion_stats");
     public final NamespacedKey minionBundleKey = new NamespacedKey(this, "minion_bundle");
 
-    private static MinionPlugin instance;
+    private static MinecraftMinionPlugin instance;
 
     private final Set<UUID> automationPlayers = new HashSet<>();
     private static final Map<UUID, Inventory> minionInventories = new HashMap<>();
@@ -49,6 +51,7 @@ public class MinionPlugin extends JavaPlugin {
     private final Map<UUID, Minion> activeMinions = new HashMap<>();
 
     private final Map<UUID, MinionStats> minionStats = new HashMap<>();
+    private MinionsAPI api;
 
     public Map<UUID, List<Minion>> getMinions() {
         return minions;
@@ -97,6 +100,23 @@ public class MinionPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        instance = this;
+
+        // Initialize API
+        api = new MinionsAPI(this);
+
+        // Register default minion types
+        api.getMinionRegistry().registerMinionType(new me.jaron.minion.api.minion.types.BlockMinerMinionType());
+        api.getMinionRegistry().registerMinionType(new me.jaron.minion.api.minion.types.FarmerMinionType());
+
+        // Register API with Bukkit's ServiceManager
+        getServer().getServicesManager().register(
+            MinionsAPI.class,
+            api,
+            this,
+            ServicePriority.Normal
+        );
+
         // Initialize bundle manager first
         bundleManager = new MinionBundleManager(this);
         upgradeManager = new MinionUpgradeManager(this);
@@ -128,6 +148,7 @@ public class MinionPlugin extends JavaPlugin {
             return false;
         });
 
+        getLogger().info("MinecraftMinionPlugin with API enabled successfully");
     }
 
     public MinionBundleManager getBundleManager() {
@@ -478,12 +499,12 @@ public class MinionPlugin extends JavaPlugin {
         return minionBundleKey;
     }
 
-    public static MinionPlugin getInstance() {
+    public static MinecraftMinionPlugin getInstance() {
         return instance;
     }
 
-    public static void setInstance(MinionPlugin instance) {
-        MinionPlugin.instance = instance;
+    public static void setInstance(MinecraftMinionPlugin instance) {
+        MinecraftMinionPlugin.instance = instance;
     }
 
     public Set<UUID> getAutomationPlayers() {
@@ -500,5 +521,13 @@ public class MinionPlugin extends JavaPlugin {
 
     public Map<UUID, MinionStats> getMinionStats() {
         return minionStats;
+    }
+
+    /**
+     * Get the API instance
+     * @return The MinionsAPI instance
+     */
+    public MinionsAPI getAPI() {
+        return api;
     }
 }

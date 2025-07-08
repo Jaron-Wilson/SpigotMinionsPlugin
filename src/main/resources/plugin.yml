@@ -1,7 +1,6 @@
 name: MinecraftMinionPlugin
-version: '1.1'
-#main: me.jaron.minionPlugin.MinecraftMinionPlugin
-main: me.jaron.minion.MinionPlugin
+version: '1.3'
+main: me.jaron.minion.MinecraftMinionPlugin
 api-version: '1.21'
 
 commands:
