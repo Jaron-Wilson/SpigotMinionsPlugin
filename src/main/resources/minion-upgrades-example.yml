@@ -1,0 +1,265 @@
+# Expanded Minion Upgrades Configuration Example
+# Shows how you can create unlimited tiers with custom properties
+
+# Default settings for all minion types
+default:
+  tiers:
+    1:
+      delay: 5000  # Base delay in milliseconds between actions for tier 1 (5 seconds)
+      efficiency: 1.0  # Base efficiency multiplier (affects success rate)
+      range: 2  # Range of blocks the minion can reach
+    2:
+      delay: 4500
+      efficiency: 1.2
+      range: 2
+    3:
+      delay: 4000
+      efficiency: 1.4
+      range: 3
+    4:
+      delay: 3500
+      efficiency: 1.6
+      range: 3
+    5:
+      delay: 3000
+      efficiency: 1.8
+      range: 3
+    # You can add as many tiers as you want!
+    6:
+      delay: 2500
+      efficiency: 2.0
+      range: 4
+    7:
+      delay: 2000
+      efficiency: 2.2
+      range: 4
+    8:
+      delay: 1800
+      efficiency: 2.4
+      range: 4
+      # Custom potions can be defined at higher tiers
+      potion_effects:
+        - HASTE:1
+    9:
+      delay: 1600
+      efficiency: 2.6
+      range: 4
+      potion_effects:
+        - HASTE:1
+        - SPEED:1
+    10:
+      delay: 1400
+      efficiency: 2.8
+      range: 5
+      potion_effects:
+        - HASTE:2
+        - SPEED:1
+    11:
+      delay: 1200
+      efficiency: 3.0
+      range: 5
+      potion_effects:
+        - HASTE:2
+        - SPEED:1
+        - NIGHT_VISION:1
+    12:
+      delay: 1000
+      efficiency: 3.5
+      range: 5
+      potion_effects:
+        - HASTE:2
+        - SPEED:2
+        - NIGHT_VISION:1
+    13:
+      delay: 800
+      efficiency: 4.0
+      range: 6
+      potion_effects:
+        - HASTE:3
+        - SPEED:2
+        - NIGHT_VISION:1
+    14:
+      delay: 700
+      efficiency: 4.5
+      range: 6
+      potion_effects:
+        - HASTE:3
+        - SPEED:2
+        - NIGHT_VISION:1
+        - FIRE_RESISTANCE:1
+    15:
+      delay: 600
+      efficiency: 5.0
+      range: 7
+      potion_effects:
+        - HASTE:3
+        - SPEED:3
+        - NIGHT_VISION:1
+        - FIRE_RESISTANCE:1
+    16:
+      delay: 500 # Minimum delay
+      efficiency: 6.0
+      range: 8
+      potion_effects:
+        - HASTE:3
+        - SPEED:3
+        - NIGHT_VISION:1
+        - FIRE_RESISTANCE:1
+        - WATER_BREATHING:1
+      # Special abilities at high tiers
+      special_abilities:
+        - AUTO_SMELT
+        - NO_HUNGER
+        - SILK_TOUCH
+
+# Specific settings for each minion type
+miner:
+  tiers:
+    1:
+      fortune_chance: 0.0  # Chance to get extra drops (0-1)
+    3:
+      fortune_chance: 0.1
+    5:
+      fortune_chance: 0.2
+    7:
+      fortune_chance: 0.3
+    9:
+      fortune_chance: 0.4
+    11:
+      fortune_chance: 0.5
+    13:
+      fortune_chance: 0.6
+    15:
+      fortune_chance: 0.7
+    16:
+      fortune_chance: 0.8
+      ore_doubling: true  # Custom property for highest tier
+
+farmer:
+  tiers:
+    1:
+      bonemeal_chance: 0.0  # Chance to apply bonemeal effect (0-1)
+      double_crops: 0.0  # Chance to get double harvest (0-1)
+    3:
+      bonemeal_chance: 0.1
+      double_crops: 0.05
+    5:
+      bonemeal_chance: 0.2
+      double_crops: 0.1
+    7:
+      bonemeal_chance: 0.3
+      double_crops: 0.15
+    9:
+      bonemeal_chance: 0.4
+      double_crops: 0.2
+    11:
+      bonemeal_chance: 0.5
+      double_crops: 0.25
+    13:
+      bonemeal_chance: 0.6
+      double_crops: 0.3
+    15:
+      bonemeal_chance: 0.7
+      double_crops: 0.35
+    16:
+      bonemeal_chance: 0.8
+      double_crops: 0.4
+      instant_growth: true  # Tier 16 farmers can grow plants instantly!
+      crop_protection: true # Crops won't be trampled
+
+lumberjack:
+  tiers:
+    1:
+      replant_saplings: false
+    2:
+      replant_saplings: true
+    5:
+      # Custom property for some tiers
+      extra_saplings_chance: 0.1
+    8:
+      extra_saplings_chance: 0.2
+    10:
+      extra_saplings_chance: 0.3
+    12:
+      extra_saplings_chance: 0.4
+    14:
+      extra_saplings_chance: 0.5
+    16:
+      extra_saplings_chance: 0.6
+      full_tree_harvest: true  # Special ability for max tier
+
+# You can define completely new minion types with custom properties
+fisher:
+  tiers:
+    1:
+      treasure_chance: 0.0
+    3:
+      treasure_chance: 0.05
+    5:
+      treasure_chance: 0.1
+    7:
+      treasure_chance: 0.15
+    9:
+      treasure_chance: 0.2
+    11:
+      treasure_chance: 0.25
+    13:
+      treasure_chance: 0.3
+    15:
+      treasure_chance: 0.35
+    16:
+      treasure_chance: 0.4
+      enchanted_catch_chance: 0.1
+
+# Define upgrade costs for each tier (can define as many tiers as needed)
+upgrade_costs:
+  # Format: tier_to_upgrade_to: {material: amount, material: amount}
+  2:
+    IRON_INGOT: 16
+    REDSTONE: 8
+  3:
+    IRON_INGOT: 32
+    REDSTONE: 16
+  4:
+    GOLD_INGOT: 16
+    LAPIS_LAZULI: 16
+  5:
+    GOLD_INGOT: 32
+    LAPIS_LAZULI: 32
+  6:
+    DIAMOND: 8
+    EMERALD: 4
+  7:
+    DIAMOND: 16
+    EMERALD: 8
+  8:
+    DIAMOND: 32
+    EMERALD: 16
+  9:
+    NETHERITE_SCRAP: 2
+    NETHER_STAR: 1
+  10:
+    NETHERITE_INGOT: 2
+    NETHER_STAR: 2
+  11:
+    NETHERITE_INGOT: 4
+    NETHER_STAR: 3
+  12:
+    NETHERITE_INGOT: 8
+    NETHER_STAR: 4
+  13:
+    NETHERITE_INGOT: 16
+    DRAGON_BREATH: 8
+  14:
+    NETHERITE_BLOCK: 1
+    DRAGON_BREATH: 16
+    DRAGON_EGG: 1
+  15:
+    NETHERITE_BLOCK: 2
+    DRAGON_BREATH: 32
+    DRAGON_EGG: 2
+  16:
+    NETHERITE_BLOCK: 4
+    DRAGON_BREATH: 64
+    DRAGON_EGG: 3
+    END_CRYSTAL: 10

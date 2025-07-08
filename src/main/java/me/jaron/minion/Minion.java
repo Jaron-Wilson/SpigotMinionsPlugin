@@ -1,5 +1,10 @@
 package me.jaron.minion;
 
+import me.jaron.minion.api.MinionsAPI;
+import me.jaron.minion.api.events.MinionCollectItemEvent;
+import me.jaron.minion.api.events.MinionDealDamageEvent;
+import me.jaron.minion.api.events.MinionWorkEvent;
+import me.jaron.minion.api.minion.IMinionType;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -7,6 +12,8 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -14,24 +21,20 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.World;
-import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.block.data.Ageable;
-import me.jaron.minion.FarmerState;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
 
-import java.util.Locale;
-
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class Minion {
 
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
     private final ArmorStand minionArmorStand;
     private BukkitTask miningTask;
+    private IMinionType minionType;
 
     private boolean notifiedStorageFull = false;
     private long lastNotificationTime = 0;
@@ -39,9 +42,43 @@ public class Minion {
     private String string;
 
 
-    public Minion(MinionPlugin plugin, ArmorStand minionArmorStand) {
+    public Minion(MinecraftMinionPlugin plugin, ArmorStand minionArmorStand) {
         this.plugin = plugin;
         this.minionArmorStand = minionArmorStand;
+
+        // Load the minion type from the ArmorStand's persistent data
+        String typeId = minionArmorStand.getPersistentDataContainer()
+            .getOrDefault(plugin.getMinionTypeKey(), PersistentDataType.STRING, MinionType.BLOCK_MINER.name());
+
+        // Convert from old enum-based system to new interface-based system
+        this.minionType = getMinionTypeFromString(typeId);
+    }
+
+    private IMinionType getMinionTypeFromString(String typeId) {
+        // First check if it's a registered minion type in our new API
+        IMinionType type = plugin.getAPI().getMinionRegistry().getMinionType(typeId.toLowerCase());
+
+        // If not found, use the old enum-based system as fallback
+        if (type == null) {
+            try {
+                MinionType oldType = MinionType.valueOf(typeId);
+                // Convert old enum to new interface implementation
+                switch(oldType) {
+                    case BLOCK_MINER:
+                        return plugin.getAPI().getMinionRegistry().getMinionType("block_miner");
+                    case FARMER:
+                        return plugin.getAPI().getMinionRegistry().getMinionType("farmer");
+                    default:
+                        // Default to block miner if unknown
+                        return plugin.getAPI().getMinionRegistry().getMinionType("block_miner");
+                }
+            } catch (IllegalArgumentException e) {
+                // Default to block miner if the enum value is invalid
+                return plugin.getAPI().getMinionRegistry().getMinionType("block_miner");
+            }
+        }
+
+        return type;
     }
 
     public static ItemStack createBackButton() {

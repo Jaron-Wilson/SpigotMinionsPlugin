@@ -2,7 +2,6 @@ package me.jaron.minion;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
@@ -12,21 +11,19 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
-import me.jaron.minion.FarmerState;
 
 import java.util.*;
 
 public class InventoryClick implements Listener {
 
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
 
-    public InventoryClick(MinionPlugin plugin) {
+    public InventoryClick(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
     }
 
@@ -470,7 +467,7 @@ public class InventoryClick implements Listener {
         // If player clicked their own inventory while a minion GUI is open, just cancel the event
         if (event.getClickedInventory() == player.getInventory() &&
             (event.getInventory().getHolder() instanceof Minion.MinionInventoryHolder ||
-             event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder ||
+             event.getInventory().getHolder() instanceof MinecraftMinionPlugin.StorageHolder ||
              event.getInventory().getHolder() instanceof TargetSelectHolder ||
              event.getInventory().getHolder() instanceof FarmerTargetSelectHolder ||
              event.getInventory().getHolder() instanceof TypeConfirmationHolder ||
@@ -487,7 +484,7 @@ public class InventoryClick implements Listener {
 
         // Cancel any click in a minion inventory or storage
         if (event.getInventory().getHolder() instanceof Minion.MinionInventoryHolder ||
-            event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder ||
+            event.getInventory().getHolder() instanceof MinecraftMinionPlugin.StorageHolder ||
             event.getInventory().getHolder() instanceof TargetSelectHolder ||
             event.getInventory().getHolder() instanceof MinionBundleManager.RawItemsHolder ||
             event.getInventory().getHolder() instanceof MinionBundleManager.CategoriesHolder ||
@@ -527,7 +524,7 @@ public class InventoryClick implements Listener {
                     if (entity instanceof ArmorStand armorStand) {
                         player.openInventory(new Minion(plugin, armorStand).getActionInventory());
                     }
-                } else if (event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder storageHolder) {
+                } else if (event.getInventory().getHolder() instanceof MinecraftMinionPlugin.StorageHolder storageHolder) {
                     Entity entity = Bukkit.getServer().getEntity(storageHolder.getMinionUUID());
                     if (entity instanceof ArmorStand armorStand) {
                         player.openInventory(new Minion(plugin, armorStand).getActionInventory());
@@ -542,7 +539,7 @@ public class InventoryClick implements Listener {
                 if (meta != null) {
                     displayName = meta.getDisplayName();
                     if (displayName.equals(ChatColor.GREEN + "Collect All")) {
-                        if (event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder storageHolder) {
+                        if (event.getInventory().getHolder() instanceof MinecraftMinionPlugin.StorageHolder storageHolder) {
                             Entity entity = Bukkit.getServer().getEntity(storageHolder.getMinionUUID());
                             if (entity instanceof ArmorStand armorStand) {
                                 Minion minion = new Minion(plugin, armorStand);
@@ -564,7 +561,7 @@ public class InventoryClick implements Listener {
                             }
                         }
                     } else if (displayName.equals(ChatColor.GREEN + "Collect from Chest")) {
-                        if (event.getInventory().getHolder() instanceof MinionPlugin.StorageHolder storageHolder) {
+                        if (event.getInventory().getHolder() instanceof MinecraftMinionPlugin.StorageHolder storageHolder) {
                             Entity entity = Bukkit.getServer().getEntity(storageHolder.getMinionUUID());
                             if (entity instanceof ArmorStand armorStand) {
                                 Minion minion = new Minion(plugin, armorStand);
@@ -723,7 +720,7 @@ public class InventoryClick implements Listener {
                     player.openInventory(plugin.getBundleManager().getPartialDeletionGUI(player, material, totalAmount));
                 } else {
                     // Left-click opens withdrawal confirmation (original behavior)
-                    player.openInventory(plugin.getBundleManager().getCategoryConfirmationGUI(player, material, totalAmount));
+                    player.openInventory(plugin.getBundleManager().getCategoryConfirmationWithdrawlGUI(player, material, totalAmount));
                 }
             }
             return;
@@ -1359,7 +1356,7 @@ public class InventoryClick implements Listener {
                         Inventory oldStorage = plugin.getMinionStorage(minionUUID);
 
 // 4. Create a new inventory with the larger size (This requires the fix to StorageHolder)
-                        Inventory newStorage = Bukkit.createInventory(new MinionPlugin.StorageHolder(minionUUID), newSize, ChatColor.AQUA + "Minion Storage");
+                        Inventory newStorage = Bukkit.createInventory(new MinecraftMinionPlugin.StorageHolder(minionUUID), newSize, ChatColor.AQUA + "Minion Storage");
 
 // 5. Copy items from the old inventory to the new one
                         if (oldStorage != null) {

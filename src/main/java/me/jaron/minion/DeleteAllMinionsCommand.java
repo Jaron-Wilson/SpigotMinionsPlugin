@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.UUID;
 
 public class DeleteAllMinionsCommand implements CommandExecutor {
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
 
-    public DeleteAllMinionsCommand(MinionPlugin plugin) {
+    public DeleteAllMinionsCommand(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
     }
 

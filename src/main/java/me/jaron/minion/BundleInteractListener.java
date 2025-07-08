@@ -7,9 +7,9 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 
 public class BundleInteractListener implements Listener {
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
 
-    public BundleInteractListener(MinionPlugin plugin) {
+    public BundleInteractListener(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
     }
 

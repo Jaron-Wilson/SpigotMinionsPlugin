@@ -10,9 +10,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 
 public class MinionAutomationCommand implements CommandExecutor {
-    private final MinionPlugin plugin;
+    private final MinecraftMinionPlugin plugin;
 
-    public MinionAutomationCommand(MinionPlugin plugin) {
+    public MinionAutomationCommand(MinecraftMinionPlugin plugin) {
         this.plugin = plugin;
     }
 
